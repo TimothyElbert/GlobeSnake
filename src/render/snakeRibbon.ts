@@ -158,7 +158,9 @@ export class SnakeRibbon {
   private readonly width: number;
   private readonly lift: number;
   private readonly maxNodes: number;
-  private readonly dryAfter: number;
+  /** 0 disables drying. Mutable because only some modes keep a permanent trail. */
+  private dryAfter = 0;
+  private readonly configuredDryAfter: number;
   private readonly dryFade: number;
   private readonly dryWidth: number;
   /** Window currently resident in the vertex buffer. */
@@ -169,7 +171,7 @@ export class SnakeRibbon {
     this.width = opts.width ?? 0.0135;
     this.lift = opts.lift ?? 0.0035;
     this.maxNodes = opts.maxNodes ?? DEFAULT_MAX_NODES;
-    this.dryAfter = opts.dryAfterNodes ?? 0;
+    this.configuredDryAfter = opts.dryAfterNodes ?? 0;
     this.dryFade = Math.max(1, opts.dryFadeNodes ?? 90);
     this.dryWidth = opts.dryWidth ?? 0.45;
     _dryInk.setHex(opts.dryColor ?? 0x5a3d22);
@@ -300,6 +302,20 @@ export class SnakeRibbon {
       along[v0] = a; along[v1] = a;
       sides[v0] = 1; sides[v1] = -1;
     }
+  }
+
+  /**
+   * Turn the dried-ink treatment on or off.
+   *
+   * It only makes sense where the trail is permanent: on a normal vacating tail
+   * the "old" end of the body is the tail itself, and drying it would just make
+   * the snake look like it was rotting.
+   */
+  setDrying(on: boolean): void {
+    const next = on ? this.configuredDryAfter : 0;
+    if (next === this.dryAfter) return;
+    this.dryAfter = next;
+    this.builtFirst = -1; // force a full rebuild with the new widths
   }
 
   update(snake: Snake, sunDir: Vector3, time: number): void {

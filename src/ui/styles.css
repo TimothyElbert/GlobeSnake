@@ -108,6 +108,35 @@ canvas { display: block; touch-action: none; }
   font-variant-numeric: tabular-nums;
 }
 
+/* Score is the number people are actually playing for; it was the same size as
+   every other stat and got lost. */
+.score-value {
+  font-family: var(--mono);
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  text-shadow: 0 0 34px rgba(255, 201, 74, 0.32);
+}
+
+.icon-btn {
+  margin-top: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 140ms, border-color 140ms;
+}
+.icon-btn:hover { background: rgba(255, 255, 255, 0.11); border-color: var(--edge-strong); }
+.icon-btn.muted { color: var(--danger); border-color: rgba(255, 107, 122, 0.4); }
+
 /* --- the prompt: the single most important element on screen --------------- */
 
 .prompt {
@@ -119,6 +148,101 @@ canvas { display: block; touch-action: none; }
   max-width: 78vw;
   padding: 14px 26px 16px;
   text-align: center;
+}
+
+/* The value bleeding out of the current target, counting down in real time. */
+.prompt-worth {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+  transition: color 200ms;
+}
+.prompt-worth.spent { color: var(--ink-faint); }
+
+/* Terrain lives beside the prompt, not in a far corner: on a large screen the
+   bottom-left is simply out of view while you are reading the target, and the
+   whole point of the terrain model is that it should change your route. */
+.hud-speed {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 0;
+  width: 168px;
+  padding: 10px 13px 12px;
+  text-align: left;
+}
+.speed-head { display: flex; align-items: baseline; gap: 6px; }
+.speed-value {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  transition: color 200ms;
+}
+.speed-terrain {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink);
+  margin-top: 1px;
+}
+.speed-track {
+  position: relative;
+  height: 4px;
+  margin: 7px 0 6px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+/* Centre tick marks ×1.00, so drag and help are visibly opposite directions. */
+.speed-track::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.34);
+}
+.speed-track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  transition: width 120ms linear, left 120ms linear;
+}
+.speed-parts { font-size: 10.5px; color: var(--ink-faint); line-height: 1.35; }
+
+/* --- Grand Tour: the whole list, up front --------------------------------- */
+
+.hud-tour {
+  position: absolute;
+  top: 172px;
+  left: 16px;
+  width: 210px;
+  padding: 10px 12px 12px;
+  max-height: min(56vh, 420px);
+  overflow-y: auto;
+}
+.hud-tour[hidden] { display: none; }
+.tour-list {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 2px;
+}
+.tour-list li {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.tour-list li.found {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-color: rgba(72, 216, 168, 0.7);
 }
 .prompt-kicker {
   font-size: 10px;
@@ -193,15 +317,22 @@ canvas { display: block; touch-action: none; }
 .hint-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 4px 11px;
+  margin-top: 10px;
+  padding: 5px 13px;
   border-radius: 999px;
   border: 1px solid var(--edge-strong);
   background: rgba(79, 195, 247, 0.10);
-  font-size: 11px;
+  font-family: inherit;
+  font-size: 11.5px;
   color: var(--hint);
   font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms, border-color 140ms;
 }
+.hint-chip:hover { background: rgba(79, 195, 247, 0.2); }
+.hint-chip.spent, .hint-chip.free { cursor: default; }
 .hint-chip kbd {
   font-family: var(--mono);
   font-size: 10px;
@@ -304,63 +435,57 @@ canvas { display: block; touch-action: none; }
 
 /* --- toasts --------------------------------------------------------------- */
 
+/* Hard-won rule: never the middle of the screen. Capture cards used to appear
+   dead centre, directly over the snake, so the reward for finding a place was
+   losing sight of the thing about to kill you. */
 .toast-rail {
   position: absolute;
-  left: 50%;
-  top: 46%;
-  transform: translate(-50%, -50%);
+  right: 18px;
+  top: 128px;
+  width: min(300px, 30vw);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  align-items: stretch;
+  gap: 8px;
   pointer-events: none;
 }
 .toast {
-  padding: 12px 22px;
-  text-align: center;
+  padding: 11px 15px;
+  text-align: left;
   animation: toast-in 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .toast-title {
   font-family: var(--serif);
-  font-size: 25px;
+  font-size: 19px;
   font-weight: 600;
   color: #fff;
+  line-height: 1.2;
 }
 .toast-points {
   font-family: var(--mono);
-  font-size: 34px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--gold);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 30px rgba(255, 201, 74, 0.4);
+  line-height: 1;
+  margin-bottom: 2px;
 }
 .toast-blurb {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ink-dim);
-  max-width: 380px;
-  margin: 5px auto 0;
+  margin: 5px 0 0;
   line-height: 1.45;
 }
-.toast-mults {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 8px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-faint);
-}
-.toast-mults b { color: var(--accent); font-weight: 600; }
-.toast.small { padding: 8px 16px; }
-.toast.small .toast-title { font-size: 15px; }
+.toast.small { padding: 8px 13px; }
+.toast.small .toast-title { font-size: 14px; }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  from { opacity: 0; transform: translateX(18px); }
   to { opacity: 1; transform: none; }
 }
 .toast.leaving { animation: toast-out 380ms ease forwards; }
 @keyframes toast-out {
-  to { opacity: 0; transform: translateY(-18px) scale(0.98); }
+  to { opacity: 0; transform: translateX(18px); }
 }
 
 /* --- full-screen overlays ------------------------------------------------- */
@@ -414,6 +539,40 @@ canvas { display: block; touch-action: none; }
   margin: 0 0 20px;
   max-width: 52ch;
 }
+
+/* --- tabs ----------------------------------------------------------------- */
+/* The start card carried mode, difficulty, controls, lore and a licence
+   footnote all at once. Only the first two are needed to press Play; the rest
+   is reference you want once and never again. */
+
+.tabs {
+  display: flex;
+  gap: 3px;
+  margin: 18px 0 16px;
+  border-bottom: 1px solid var(--edge);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 12px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 140ms, border-color 140ms;
+}
+.tab:hover { color: var(--ink-dim); }
+.tab[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab-panel[hidden] { display: none; }
+.tab-panel h2:first-child { margin-top: 0; }
 
 /* --- choice cards --------------------------------------------------------- */
 
@@ -658,6 +817,20 @@ canvas { display: block; touch-action: none; }
 
   .hud-br { bottom: 12px; right: 12px; padding: 6px; }
   .hud-br canvas { width: 92px !important; height: 92px !important; }
+
+  /* No room beside the prompt on a phone, so terrain tucks underneath it. */
+  .hud-speed {
+    position: static;
+    width: auto;
+    margin-top: 10px;
+    padding: 8px 11px;
+    text-align: center;
+  }
+  .speed-head { justify-content: center; }
+  .speed-value { font-size: 20px; }
+  .score-value { font-size: 30px; }
+  .hud-tour { display: none; }
+  .toast-rail { right: 10px; top: auto; bottom: 118px; width: min(230px, 62vw); }
 
   .hud-bl {
     bottom: 12px;

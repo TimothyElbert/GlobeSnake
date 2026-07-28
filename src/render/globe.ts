@@ -167,15 +167,28 @@ const FRAG = /* glsl */ `
     col += vec3(0.55, 0.70, 0.85) * spec * 0.16;
 
     // --- country borders, sampled from the same grid the game logic reads ----
+    //
+    // Drawn as a dark halo with a bright core rather than a single tinted line.
+    // A one-colour border is only ever legible against one kind of ground: the
+    // cream line this used to draw disappeared completely over snow and ice,
+    // which is exactly where you most need to know whether you are in Norway or
+    // Sweden. A light-on-dark pair survives any background.
     if (uBorders > 0.001) {
       vec2 duv = dataUv(vUv);
       float c0 = country;
-      float d = 0.0;
-      d += abs(floor(texture2D(uWorld, duv + vec2(uWorldTexel.x, 0.0)).a * 255.0 + 0.5) - c0);
-      d += abs(floor(texture2D(uWorld, duv - vec2(uWorldTexel.x, 0.0)).a * 255.0 + 0.5) - c0);
-      d += abs(floor(texture2D(uWorld, duv + vec2(0.0, uWorldTexel.y)).a * 255.0 + 0.5) - c0);
-      d += abs(floor(texture2D(uWorld, duv - vec2(0.0, uWorldTexel.y)).a * 255.0 + 0.5) - c0);
-      col = mix(col, vec3(1.0, 0.92, 0.72), clamp(d, 0.0, 1.0) * 0.45 * uBorders);
+      float core = 0.0;
+      float halo = 0.0;
+      for (int i = 0; i < 4; i++) {
+        vec2 dir = i == 0 ? vec2(1.0, 0.0) : i == 1 ? vec2(-1.0, 0.0)
+                 : i == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0);
+        vec2 step1 = dir * uWorldTexel;
+        core += abs(floor(texture2D(uWorld, duv + step1).a * 255.0 + 0.5) - c0);
+        halo += abs(floor(texture2D(uWorld, duv + step1 * 2.2).a * 255.0 + 0.5) - c0);
+      }
+      core = clamp(core, 0.0, 1.0);
+      halo = clamp(halo, 0.0, 1.0);
+      col = mix(col, vec3(0.05, 0.045, 0.04), halo * 0.6 * uBorders);
+      col = mix(col, vec3(1.0, 0.88, 0.52), core * 0.95 * uBorders);
     }
 
     // --- graticule: a stable reference frame so the eye is never lost --------
@@ -252,13 +265,18 @@ const FRAG = /* glsl */ `
       // antique map actually looks like.
       float inked = smoothstep(0.10, 0.46, texture2D(uInk, dataUv(vUv)).r * uInkAmount);
 
-      // Laid paper: two crossed sine grains plus blotchy age. Flat cream reads
+      // Laid paper: two crossed sine grains and a little age. Flat cream reads
       // as a beige bug; grain reads as a material.
+      //
+      // The ageing used to be sampled from the elevation channel, which drew
+      // the continents onto the *blank* paper as grey blotches — a fog-of-war
+      // leak that also made the globe look like the Moon. It is plain noise now
+      // and unrevealed vellum tells you nothing.
       float grain = sin(vUv.x * 2200.0) * 0.5 + sin(vUv.y * 1500.0) * 0.5;
-      float blotch = texture2D(uWorld, dataUv(vUv) * 3.0).r;
-      vec3 paper = vec3(0.878, 0.827, 0.718)
+      float blotch = fract(sin(dot(floor(vUv * 90.0), vec2(12.9898, 78.233))) * 43758.5453);
+      vec3 paper = vec3(0.898, 0.835, 0.706)
                  * (1.0 + grain * 0.012)
-                 * (0.94 + blotch * 0.10);
+                 * (0.975 + blotch * 0.05);
       // Age the edges of the visible disc, like a globe gore that has been handled.
       paper *= 1.0 - pow(1.0 - max(dot(n, viewDir), 0.0), 3.0) * 0.22;
 
@@ -297,8 +315,12 @@ const FRAG = /* glsl */ `
 
       vec3 ink = vec3(0.192, 0.129, 0.075);
       vec3 pc = mix(paper, drawn, inked);
-      // Coast is a whisper until you have been there, then a drawn line.
-      pc = mix(pc, ink, edge * (0.20 + 0.80 * inked));
+      // Coastlines exist only where you have been. This is the one place fog of
+      // war earns its keep: Terra is not asking you to recall where Paris is,
+      // it is asking you to find your bearings from nothing, and a blank ocean
+      // that slowly becomes a coastline is the whole feeling of the variant.
+      // Every other world shows you the map from the first frame.
+      pc = mix(pc, ink, edge * inked);
       // Graticule in faded red ochre, as on an old plate.
       float lat2 = degrees(asin(clamp(sphereDir.y, -1.0, 1.0)));
       float lon2 = degrees(atan(-sphereDir.z, sphereDir.x));

@@ -1,6 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-<path fill="currentColor" d="M10 176H190V180H10Z"/>
-<path fill="currentColor" fill-rule="evenodd" d="M10 176L68 82L126 176ZM59 98h18v3H59Z"/>
-<path fill="currentColor" d="M103 176L140 116L177 176Z"/>
-<path fill="currentColor" d="M162 176L176 153L190 176Z"/>
+<!-- Giza, as the Sphinx with the Great Pyramid rising behind it.
+     Pyramids alone kept reading as a mountain range — a triangle on a horizon
+     is a mountain unless something says otherwise. The Sphinx says otherwise
+     immediately: a flat-topped, flaring nemes headdress exists nowhere in
+     nature. It stands ~500 m from the Great Pyramid, so this is the same place
+     rather than a substitute.
+     The two shapes deliberately overlap and merge, because that is exactly what
+     the real silhouette does: the pyramid is behind, and only its apex and far
+     slope clear the Sphinx's back. The head is drawn larger than a true side
+     elevation would have it, the way every photograph of the thing does. -->
+<path fill="currentColor" d="M2 178h196v6H2Z"/>
+<path fill="currentColor" d="M146 40 94 178h104Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M4 178 4 156 20 150 48 146 56 134 48 118 42 112 34 104 32 96 38 88 36 82 46 76 54 72 92 72 100 118 90 128 120 136 150 146 168 158 170 178ZM41 92h9v6h-9Z"/>
 </svg>

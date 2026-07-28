@@ -12,11 +12,18 @@ import {
   type Deck, type LiveTarget, type TargetRecord,
 } from './targets';
 import {
-  GROWTH_PER_CAPTURE_DEG, MAX_HINT_LEVEL, RECOGNITION_GRACE, SHIP_BONUS, SHIP_BOOST_SECONDS,
+  GROWTH_PER_CAPTURE_DEG, MAX_HINT_LEVEL, RECOGNITION_GRACE, SHIP_BOOST_REFILL, SHIP_BOOST_SECONDS,
   TIER_BASE, hintMultiplier, scoreCapture, streakMultiplier, type CaptureBreakdown,
 } from './scoring';
 
-export type GameMode = 'endless' | 'daily' | 'relay';
+/**
+ * `tour` is the Grand Tour: twenty places named up front, visitable in any
+ * order, on a trail that never releases. Knowing the whole list is the point —
+ * it turns the game from "react to a prompt" into route planning, and the
+ * permanent line means a lazy order walls you off from your own remaining
+ * targets. Ranked on finishing time, not points.
+ */
+export type GameMode = 'endless' | 'daily' | 'relay' | 'tour';
 export type Phase = 'idle' | 'playing' | 'paused' | 'captured' | 'dead' | 'finished';
 
 export interface SessionOptions {
@@ -28,6 +35,8 @@ export interface SessionOptions {
   /** Relay mode: starting clock and the bonus each capture adds. */
   relaySeconds?: number;
   relayBonusSeconds?: number;
+  /** Grand Tour: how many places are on the list. */
+  tourLength?: number;
   seed?: number;
   /**
    * Where the hint ladder stops. Terra Incognita caps at 2 — bearing and range
@@ -35,6 +44,8 @@ export interface SessionOptions {
    * resorting to hiding the map.
    */
   maxHintLevel?: number;
+  /** Terra Incognita: record how much of the globe the player uncovered. */
+  trackExploration?: boolean;
 }
 
 export interface CaptureEvent {
@@ -68,6 +79,12 @@ export interface RunLogEntry {
 const _tmp = new Vector3();
 const _dir = new Vector3();
 
+/** Exploration grid: 1.4° cells, and how far the snake "sees" as it travels. */
+const EXPLORE_CELL = 1.40625;
+const EXPLORE_COLS = 256;
+const EXPLORE_ROWS = 128;
+const EXPLORE_RADIUS_DEG = 4.5;
+
 export class Session {
   readonly snake: Snake;
   readonly ships: ShipFleet;
@@ -92,8 +109,15 @@ export class Session {
 
   /** Relay mode clock. */
   clock = 0;
+  /** Grand Tour: did the player actually finish the list? */
+  tourCompleted = false;
 
   private readonly dailyPlan: LiveTarget[] = [];
+  private readonly tourList: LiveTarget[] = [];
+  private readonly tourFound = new Set<string>();
+  private readonly explored: Uint8Array | null;
+  private exploredWeight = 0;
+  private readonly exploredTotal: number;
   readonly log: RunLogEntry[] = [];
   /** Trail snapshot for the share card: [lat, lon, climate] triples. */
   readonly traceLat: number[] = [];
@@ -126,6 +150,19 @@ export class Session {
     this.drift = new DifficultyDrift(DECKS[this.options.deck]);
     this.snake = new Snake(world, this.options.snake);
     this.ships = new ShipFleet(world);
+
+    if (this.options.trackExploration) {
+      this.explored = new Uint8Array(EXPLORE_COLS * EXPLORE_ROWS);
+      let total = 0;
+      for (let row = 0; row < EXPLORE_ROWS; row++) {
+        const rowLat = 90 - (row + 0.5) * EXPLORE_CELL;
+        total += Math.max(0.05, Math.cos((rowLat * Math.PI) / 180)) * EXPLORE_COLS;
+      }
+      this.exploredTotal = total;
+    } else {
+      this.explored = null;
+      this.exploredTotal = 0;
+    }
   }
 
   setEvents(e: SessionEvents): void {
@@ -186,12 +223,16 @@ export class Session {
     this.traceLon.length = 0;
     this.traceClimate.length = 0;
     this.clock = this.options.relaySeconds ?? 120;
+    this.tourCompleted = false;
     this.pool.resetUsed();
     this.drift.reset();
     this.ships.reset();
     this.captureSlowdown = 0;
     this.shipBoost = 0;
+    if (this.explored) { this.explored.fill(0); this.exploredWeight = 0; }
+    this.tourFound.clear();
     if (this.options.mode === 'daily') this.buildDailyPlan();
+    if (this.options.mode === 'tour') this.buildTour();
 
     const spawn = this.findSpawn();
     this.snake.reset(spawn.position, spawn.heading);
@@ -244,7 +285,61 @@ export class Session {
     }
   }
 
+  /** The Grand Tour list: a fixed spread of tiers, seeded, shown up front. */
+  private buildTour(): void {
+    this.tourList.length = 0;
+    const n = this.options.tourLength ?? 20;
+    const taken = new Set<string>();
+    // Weighted toward the middle tiers: twenty places nobody has heard of is a
+    // slog, and twenty countries is a lap of honour.
+    const ladder = [1, 2, 2, 3, 3, 4];
+    for (let i = 0; i < n; i++) {
+      const t = this.pool.pickPure(ladder[i % ladder.length], this.rng, taken);
+      if (t) { taken.add(t.id); this.tourList.push(t); }
+    }
+  }
+
+  /** Remaining Grand Tour places, in the order they were listed. */
+  get tourRemaining(): LiveTarget[] {
+    return this.tourList.filter((t) => !this.tourFound.has(t.id));
+  }
+
+  get tourAll(): LiveTarget[] {
+    return this.tourList;
+  }
+
+  isTourFound(id: string): boolean {
+    return this.tourFound.has(id);
+  }
+
+  /** Whichever unfound place is nearest — what the hint system aims at. */
+  private nearestTourTarget(): LiveTarget | null {
+    let best: LiveTarget | null = null;
+    let bestDot = -2;
+    for (const t of this.tourList) {
+      if (this.tourFound.has(t.id)) continue;
+      const d = this.snake.position.dot(t.position);
+      if (d > bestDot) { bestDot = d; best = t; }
+    }
+    return best;
+  }
+
   private nextTarget(): void {
+    if (this.options.mode === 'tour') {
+      // Every remaining place is live at once; the "target" is only the nearest
+      // one, so hints and the bearing wedge have something to point at.
+      const t = this.nearestTourTarget();
+      if (!t) { this.finish(); return; }
+      this.target = t;
+      this.targetElapsed = 0;
+      this.paidHintLevel = 0;
+      this.autoHintShown = false;
+      this.parSeconds = this.routes.routeCostDeg(this.snake.position, t.position)
+        / this.snake.cfg.baseSpeedDeg + RECOGNITION_GRACE;
+      this.events.onTarget?.(t, this.targetIndex, this.tourList.length);
+      return;
+    }
+
     const t = this.options.mode === 'daily'
       ? this.dailyPlan[this.targetIndex] ?? null
       : this.pool.pick(this.drift.tier, this.snake, this.rng);
@@ -317,9 +412,17 @@ export class Session {
 
     const caught = this.ships.consumeAt(this.snake.position);
     if (caught) {
-      this.score += SHIP_BONUS;
+      // Fuel, not points. As a score bonus a ship competed with the actual
+      // objective and muddied the leaderboard; as a boost refill it is purely a
+      // tactical prize — worth detouring for when you are empty and heading
+      // somewhere far, worth ignoring when you are not.
+      const before = this.snake.boostStamina;
+      this.snake.boostStamina = Math.min(
+        this.snake.cfg.boostCapacity,
+        before + this.snake.cfg.boostCapacity * SHIP_BOOST_REFILL,
+      );
       this.shipBoost = SHIP_BOOST_SECONDS;
-      this.events.onShip?.(caught, SHIP_BONUS);
+      this.events.onShip?.(caught, this.snake.boostStamina - before);
     }
 
     if (this.options.mode === 'relay') {
@@ -329,6 +432,23 @@ export class Session {
 
     if (!this.target || this.phase !== 'playing') return;
     this.targetElapsed += dt;
+
+    // On the Grand Tour every unfound place is live, so check them all — and
+    // keep the nearest one nominated so the hint has something to aim at.
+    if (this.options.mode === 'tour') {
+      for (const t of this.tourList) {
+        if (this.tourFound.has(t.id)) continue;
+        if (isCaptured(t, this.snake.position, this.world)) { this.target = t; this.capture(); return; }
+      }
+      const near = this.nearestTourTarget();
+      if (near && near !== this.target && this.paidHintLevel === 0) {
+        this.target = near;
+        this.parSeconds = this.routes.routeCostDeg(this.snake.position, near.position)
+          / this.snake.cfg.baseSpeedDeg + RECOGNITION_GRACE;
+        this.events.onTarget?.(near, this.targetIndex, this.tourList.length);
+      }
+      return;
+    }
 
     // The promise that you can never get stuck. At twice par the free hint
     // arrives on its own and costs nothing — the escape hatch must not require
@@ -341,12 +461,61 @@ export class Session {
     if (isCaptured(this.target, this.snake.position, this.world)) this.capture();
   }
 
+  /**
+   * Mark the ground around the snake as seen.
+   *
+   * Terra Incognita hides the world until you have been there, so "how much of
+   * the planet did you actually uncover" is a real achievement and a separate
+   * axis from score — you can post a huge score by shuttling between two known
+   * places, and that is a different run from one that crossed an ocean to look.
+   *
+   * Cells are cos-weighted, or an equirectangular grid would score a lap of
+   * Antarctica as most of the world.
+   */
+  private markExplored(): void {
+    const grid = this.explored;
+    if (!grid) return;
+    const p = this.snake.position;
+    const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) * (180 / Math.PI);
+    const lon = Math.atan2(-p.z, p.x) * (180 / Math.PI);
+    const r = EXPLORE_RADIUS_DEG;
+
+    const rowSpan = Math.ceil(r / EXPLORE_CELL);
+    const centreRow = Math.floor((90 - lat) / EXPLORE_CELL);
+    for (let dr = -rowSpan; dr <= rowSpan; dr++) {
+      const row = centreRow + dr;
+      if (row < 0 || row >= EXPLORE_ROWS) continue;
+      const rowLat = 90 - (row + 0.5) * EXPLORE_CELL;
+      const dLat = Math.abs(rowLat - lat);
+      if (dLat > r) continue;
+      // Half-width of the disc at this latitude, widened by 1/cos(lat).
+      const half = Math.sqrt(Math.max(0, r * r - dLat * dLat));
+      const cos = Math.max(0.05, Math.cos((rowLat * Math.PI) / 180));
+      const lonHalf = Math.min(180, half / cos);
+      const colSpan = Math.ceil(lonHalf / EXPLORE_CELL);
+      const centreCol = Math.floor((lon + 180) / EXPLORE_CELL);
+      for (let dc = -colSpan; dc <= colSpan; dc++) {
+        const col = ((centreCol + dc) % EXPLORE_COLS + EXPLORE_COLS) % EXPLORE_COLS;
+        const i = row * EXPLORE_COLS + col;
+        if (grid[i]) continue;
+        grid[i] = 1;
+        this.exploredWeight += cos;
+      }
+    }
+  }
+
+  /** Fraction of the globe's surface uncovered, 0..1. */
+  get exploredFraction(): number {
+    return this.exploredTotal > 0 ? this.exploredWeight / this.exploredTotal : 0;
+  }
+
   private recordTrace(dt: number): void {
     // ~4 samples/second is plenty for a share-card polyline and keeps a
     // fifteen-minute run under 4,000 points.
     this.traceAccum += dt;
     if (this.traceAccum < 0.25) return;
     this.traceAccum = 0;
+    this.markExplored();
     const p = this.snake.position;
     this.traceLat.push(Math.asin(Math.max(-1, Math.min(1, p.y))) * (180 / Math.PI));
     this.traceLon.push(Math.atan2(-p.z, p.x) * (180 / Math.PI));
@@ -398,6 +567,15 @@ export class Session {
       this.target = null;
       this.finish();
       return;
+    }
+    if (this.options.mode === 'tour') {
+      this.tourFound.add(t.id);
+      if (this.tourFound.size >= this.tourList.length) {
+        this.target = null;
+        this.tourCompleted = true;
+        this.finish();
+        return;
+      }
     }
     this.nextTarget();
   }

@@ -10,6 +10,7 @@ import { SnakeRibbon, type RibbonOptions } from '@render/snakeRibbon';
 import { ChaseCamera } from '@render/chaseCamera';
 import { SnakeHead, Starfield, TargetPin } from '@render/props';
 import { Session, type GameMode } from '@game/session';
+import { dayKey, submit as submitRecord } from '@game/records';
 import type { Deck, TargetRecord } from '@game/targets';
 import { Hud } from '@ui/hud';
 import { Minimap } from '@ui/minimap';
@@ -55,6 +56,14 @@ export interface VariantConfig {
   maxHintLevel?: number;
   hintNames?: string[];
   starBrightness?: number;
+  /** Terra Incognita: record how much of the globe the player uncovered. */
+  trackExploration?: boolean;
+  /**
+   * Vertical exaggeration used by everything that must sit on the ground.
+   * Must match `globe.relief`, or the snake floats above the terrain (or sinks
+   * into it) by exactly the difference.
+   */
+  relief?: number;
   /** Fraction of a day per second for the terminator. 0 freezes the sun. */
   sunSpeed?: number;
   defaultDeck?: Deck;
@@ -66,6 +75,16 @@ export interface VariantConfig {
 }
 
 const ALL_TARGETS = [...(t12 as TargetRecord[]), ...(t35 as TargetRecord[])];
+
+/** Stable per-world salt so each world's daily is a different puzzle. */
+function variantSalt(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
 
 export async function bootstrap(config: VariantConfig): Promise<void> {
   const loading = new LoadingScreen(config.chrome.name);
@@ -135,9 +154,22 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   const input = new InputManager(canvas, camera.camera);
   const audio = new GameAudio();
 
-  const hud = new Hud({ maxHintLevel: config.maxHintLevel, hintNames: config.hintNames });
+  const hud = new Hud({
+    maxHintLevel: config.maxHintLevel,
+    hintNames: config.hintNames,
+    onMute: () => toggleMute(),
+  });
   hud.mount();
   hud.setVisible(false);
+  hud.setMuted(audio.muted);
+  hud.onHintClick(() => { void audio.ensureStarted(); takeHint(); });
+
+  function toggleMute(): void {
+    void audio.ensureStarted();
+    const m = audio.toggleMute();
+    hud.setMuted(m);
+    hud.showMessage(m ? 'Muted' : 'Sound on', 1100);
+  }
 
   const minimap = new Minimap(world);
   hud.minimapSlot.append(minimap.canvas);
@@ -148,6 +180,9 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   let mode: GameMode = 'endless';
   let time = 0;
   let lowQuality = false;
+  // Whatever the globe is displacing by, the snake, camera and pins must use
+  // the same number or they will not touch the ground.
+  const reliefScale = config.relief ?? RELIEF_SCALE;
 
   // Persisted view preferences. Borders default ON: this is a game about
   // recognising countries, and a player who cannot see where one ends is being
@@ -162,19 +197,26 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     try { localStorage.setItem(`globesnake:pref:${key}`, JSON.stringify(value)); } catch { /* private mode */ }
   };
 
-  let bordersOn = pref('borders', true);
   camera.setZoom(pref('zoom', camera.zoom));
-  globe.setBorders(bordersOn);
+  // Always on. Knowing which country you are in is the game's core readout, and
+  // a border you have to remember to switch on is a border most people never see.
+  globe.setBorders(true);
+  audio.loadPreference();
 
   // --- screens --------------------------------------------------------------
 
-  const start = new StartScreen(config.chrome, (choice) => {
-    mode = choice.mode;
-    deck = choice.deck;
-    start.hide();
-    void audio.ensureStarted();
-    beginRun();
-  });
+  const start = new StartScreen(
+    config.chrome,
+    (choice) => {
+      mode = choice.mode;
+      deck = choice.deck;
+      start.hide();
+      void audio.ensureStarted();
+      beginRun();
+    },
+    (style) => { void audio.ensureStarted(); audio.setMusicStyle(style); },
+    audio.musicStyle,
+  );
   start.mount();
 
   const pause = new PauseScreen(
@@ -210,11 +252,25 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     // "ships were never in the scene graph".
     if (session) scene.remove(session.ships.group);
 
-    const seed = mode === 'daily' ? todaySeed() : undefined;
+    // Salt the daily seed with the world, so the three of them are three
+    // different puzzles on the same date — otherwise finding Nauru in
+    // Expedition would hand you the answer in Tempest and Terra as well.
+    const seed = mode === 'daily' || mode === 'tour'
+      ? (todaySeed() ^ variantSalt(config.id) ^ (mode === 'tour' ? 0x54_4f_55_52 : 0)) >>> 0
+      : undefined;
+
+    // Only the Grand Tour keeps an indelible line, and only there does the
+    // ribbon's dried-ink treatment make sense.
+    const permanent = mode === 'tour';
+    ribbon.setDrying(permanent);
+
     session = new Session(world, ALL_TARGETS, {
       mode, deck, seed,
-      snake: config.snake,
+      snake: permanent
+        ? { ...config.snake, trailMode: 'permanent', growthPerCaptureDeg: 0 }
+        : config.snake,
       maxHintLevel: config.maxHintLevel,
+      trackExploration: config.trackExploration,
     });
     ctx = { scene, renderer, camera, globe, ribbon, world, session, hud, audio, input, time };
     scene.add(session.ships.group);
@@ -230,7 +286,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
         audio.capture(e.target.tier, session!.streak);
         capturePin.setPosition(
           e.target.position,
-          world.reliefAt(e.target.position) * RELIEF_SCALE + 0.005,
+          world.reliefAt(e.target.position) * reliefScale + 0.005,
         );
         captureFlash = 2.2;
         config.onCapture?.(ctx!);
@@ -239,26 +295,41 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
         hud.showHintTaken(level, cost);
         audio.hint(cost === 0);
       },
-      onShip: (_p, bonus) => { hud.showShip(bonus); audio.ship(); },
+      onShip: (_p, refillSeconds) => { hud.showShip(refillSeconds); audio.ship(); },
       onDeath: () => { audio.death(); window.setTimeout(showSummary, 900); },
       onFinish: () => { window.setTimeout(showSummary, 700); },
     });
 
     session.start();
-    globe.setBorders(bordersOn);
+    globe.setBorders(true);
     camera.reset(
       session.snake.position,
       session.snake.heading,
-      world.reliefAt(session.snake.position) * RELIEF_SCALE,
+      world.reliefAt(session.snake.position) * reliefScale,
     );
     hud.clearToasts();
     hud.setVisible(true);
+    hud.setTourVisible(mode === 'tour');
     audio.revive();
     config.onReset?.(ctx);
   }
 
   function showSummary(): void {
     if (!session) return;
+    // Records are written once, here, so a run cannot be banked twice by
+    // reopening the summary.
+    submitRecord({
+      variant: config.chrome.name,
+      mode, deck,
+      day: mode === 'daily' || mode === 'tour' ? dayKey() : '',
+      score: session.score,
+      found: session.log.length,
+      seconds: session.elapsed,
+      completed: session.tourCompleted,
+      explored: session.exploredFraction,
+      hints: session.log.filter((e) => e.hintLevel > 0).length,
+      distanceKm: session.snake.distanceTravelledKm,
+    });
     summary.show({
       variant: config.chrome.name,
       mode, deck,
@@ -270,6 +341,8 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
       traceLat: session.traceLat,
       traceLon: session.traceLon,
       traceClimate: session.traceClimate,
+      explored: session.exploredFraction,
+      completed: session.tourCompleted,
     });
   }
 
@@ -292,18 +365,9 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   input.on('restart', () => {
     if (session && start.root.hidden) { summary.hide(); pause.hide(); beginRun(); }
   });
-  input.on('mute', () => {
-    const m = audio.toggleMute();
-    hud.showMessage(m ? 'Muted' : 'Sound on', 1100);
-  });
+  input.on('mute', () => toggleMute());
   input.on('zoomIn', () => { camera.nudgeZoom(-0.09); setPref('zoom', camera.zoomWanted); });
   input.on('zoomOut', () => { camera.nudgeZoom(0.09); setPref('zoom', camera.zoomWanted); });
-  input.on('borders', () => {
-    bordersOn = !bordersOn;
-    globe.setBorders(bordersOn);
-    setPref('borders', bordersOn);
-    hud.showMessage(bordersOn ? 'Borders on' : 'Borders off', 1100);
-  });
 
   window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -334,7 +398,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
       if (country > 0) globe.highlightCountry(country, 1);
     }
     if (level >= 3) {
-      pin.setPosition(s.target.position, world.reliefAt(s.target.position) * RELIEF_SCALE + 0.004);
+      pin.setPosition(s.target.position, world.reliefAt(s.target.position) * reliefScale + 0.004);
       pin.setColor(0xffc94a);
       pin.setOpacity(1);
     }
@@ -374,7 +438,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
 
       if (session) {
         const s = session;
-        const ground = world.reliefAt(s.snake.position) * RELIEF_SCALE;
+        const ground = world.reliefAt(s.snake.position) * reliefScale;
         ribbon.update(s.snake, globe.sun, time);
         head.update(s.snake.position, s.snake.heading, s.snake.surface.climate, ground + 0.0035, time);
         head.setEyeGlow(s.snake.wake.active);
@@ -425,7 +489,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   if (import.meta.env.DEV) {
     (window as unknown as Record<string, unknown>).__gs = {
       get session() { return session; },
-      world, globe, camera, ribbon, loop, config, scene, renderer, canvas,
+      world, globe, camera, ribbon, loop, config, scene, renderer, canvas, audio, hud,
       beginRun,
       /**
        * Advance and render `seconds` of game time synchronously, then return a

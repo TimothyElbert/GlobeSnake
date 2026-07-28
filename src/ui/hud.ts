@@ -7,21 +7,21 @@ import { baseUrl, clearChildren, el, hexToCss } from './dom';
 /**
  * The heads-up display.
  *
- * DOM rather than canvas, deliberately: text is the content of this game — a
- * place name is the puzzle — and browser text rendering, selection, subpixel
- * hinting and accessibility are all better than anything worth hand-rolling
- * into a WebGL overlay for a project this size.
+ * DOM rather than canvas: text is the content of this game, and browser text
+ * rendering beats anything worth hand-rolling into a WebGL overlay.
  *
- * Layout follows one rule: the prompt owns the top centre and nothing competes
- * with it. Everything else lives in a corner and stays out of the way of a
- * player who is reading "Which country is this?" while steering.
+ * The layout follows one rule learned the hard way — **nothing that matters may
+ * sit in the middle of the screen**, because that is where the snake is and
+ * where you are about to die. Capture cards used to appear dead centre and
+ * blocked the one thing you needed to see. Everything now lives along the top
+ * edge or in a corner, and the play area stays clear.
  */
 
 export interface HudOptions {
-  /** Terra Incognita hides the exact-pin hint entirely; the ladder stops at 2. */
+  /** Terra Incognita stops the hint ladder before the exact pin. */
   maxHintLevel?: number;
   hintNames?: string[];
-  accent?: string;
+  onMute?: () => void;
 }
 
 export class Hud {
@@ -29,6 +29,7 @@ export class Hud {
   private readonly promptKicker: HTMLElement;
   private readonly promptName: HTMLElement;
   private readonly promptImageSlot: HTMLElement;
+  private readonly promptWorth: HTMLElement;
   private readonly promptMeta: HTMLElement;
   private readonly parFill: HTMLElement;
   private readonly hintChip: HTMLElement;
@@ -39,17 +40,22 @@ export class Hud {
   private readonly modeLabel: HTMLElement;
   private readonly modeSub: HTMLElement;
 
-  private readonly whereCountry: HTMLElement;
-  private readonly whereTerrain: HTMLElement;
-  private readonly whereSwatch: HTMLElement;
   private readonly speedValue: HTMLElement;
+  private readonly speedTerrain: HTMLElement;
   private readonly speedParts: HTMLElement;
-  private lastSpeedText = '';
+  private readonly speedBar: HTMLElement;
+
+  private readonly whereCountry: HTMLElement;
+  private readonly whereSwatch: HTMLElement;
+  private readonly whereClimate: HTMLElement;
 
   private readonly boostFill: HTMLElement;
   private readonly wakeFill: HTMLElement;
   private readonly toastRail: HTMLElement;
   private readonly vignette: HTMLElement;
+  private readonly tourPanel: HTMLElement;
+  private readonly tourList: HTMLElement;
+  private readonly muteButton: HTMLButtonElement;
   readonly minimapSlot: HTMLElement;
 
   private readonly maxHint: number;
@@ -57,27 +63,48 @@ export class Hud {
   private lastCountry = '';
   private lastTerrain: Terrain | -1 = -1;
   private lastClimate = -1;
+  private lastSpeedText = '';
+  private lastTourSignature = '';
 
   constructor(opts: HudOptions = {}) {
     this.maxHint = opts.maxHintLevel ?? MAX_HINT_LEVEL;
     this.hintNames = opts.hintNames ?? ['Bearing & range', 'Search area', 'Exact location'];
 
+    // --- the prompt, and the value bleeding out of it ----------------------
     this.promptKicker = el('div', { class: 'prompt-kicker', text: 'FIND' });
     this.promptImageSlot = el('div');
     this.promptName = el('div', { class: 'prompt-name', text: '—' });
+    this.promptWorth = el('div', { class: 'prompt-worth' });
     this.promptMeta = el('div', { class: 'prompt-meta' });
     this.parFill = el('i', { class: 'par-fill' });
-    this.hintChip = el('span', { class: 'hint-chip' });
+    this.hintChip = el('button', { class: 'hint-chip', type: 'button' });
+
+    // --- terrain, right beside the prompt where it cannot be ignored -------
+    this.speedValue = el('span', { class: 'speed-value', text: '×1.00' });
+    this.speedTerrain = el('div', { class: 'speed-terrain', text: '—' });
+    this.speedParts = el('div', { class: 'speed-parts', text: '' });
+    this.speedBar = el('i');
+    const speedPanel = el('div', { class: 'hud-speed panel' }, [
+      el('div', { class: 'stat-label', text: 'Going' }),
+      el('div', { class: 'speed-head' }, [this.speedValue]),
+      this.speedTerrain,
+      el('div', { class: 'speed-track' }, [this.speedBar]),
+      this.speedParts,
+    ]);
 
     const prompt = el('div', { class: 'prompt panel' }, [
       this.promptKicker,
       this.promptImageSlot,
       this.promptName,
+      this.promptWorth,
       this.promptMeta,
       el('div', { class: 'par-track' }, [this.parFill]),
+      this.hintChip,
+      speedPanel,
     ]);
 
-    this.scoreValue = el('div', { class: 'stat-value gold', text: '0' });
+    // --- score, made unmissable --------------------------------------------
+    this.scoreValue = el('div', { class: 'score-value', text: '0' });
     this.scoreSub = el('div', { class: 'stat-sub', text: 'no streak' });
     const tl = el('div', { class: 'hud-tl panel' }, [
       el('div', { class: 'stat-label', text: 'Score' }),
@@ -88,18 +115,28 @@ export class Hud {
     this.modeLabel = el('div', { class: 'stat-label', text: 'Elapsed' });
     this.modeValue = el('div', { class: 'stat-value', text: '0:00' });
     this.modeSub = el('div', { class: 'stat-sub', text: '' });
-    const tr = el('div', { class: 'hud-tr panel' }, [this.modeLabel, this.modeValue, this.modeSub]);
+    this.muteButton = el('button', {
+      class: 'icon-btn', type: 'button', title: 'Mute (M)', 'aria-label': 'Mute',
+      onclick: () => opts.onMute?.(),
+    }, ['🔊']) as HTMLButtonElement;
+    const tr = el('div', { class: 'hud-tr panel' }, [
+      this.modeLabel, this.modeValue, this.modeSub, this.muteButton,
+    ]);
+
+    // --- the Grand Tour list -----------------------------------------------
+    this.tourList = el('ol', { class: 'tour-list' });
+    this.tourPanel = el('div', { class: 'hud-tour panel', hidden: true }, [
+      el('div', { class: 'stat-label', text: 'The list' }),
+      this.tourList,
+    ]);
 
     this.whereCountry = el('div', { class: 'where-country', text: '—' });
     this.whereSwatch = el('span', { class: 'swatch' });
-    this.whereTerrain = el('span', { text: '' });
-    this.speedValue = el('span', { class: 'speed-value', text: '×1.00' });
-    this.speedParts = el('span', { class: 'speed-parts', text: '' });
+    this.whereClimate = el('span', { text: '' });
     const bl = el('div', { class: 'hud-bl panel where' }, [
       el('div', { class: 'stat-label', text: 'You are in' }),
       this.whereCountry,
-      el('div', { class: 'where-terrain' }, [this.whereSwatch, this.whereTerrain]),
-      el('div', { class: 'speed-row' }, [this.speedValue, this.speedParts]),
+      el('div', { class: 'where-terrain' }, [this.whereSwatch, this.whereClimate]),
     ]);
 
     this.boostFill = el('i');
@@ -114,7 +151,6 @@ export class Hud {
           el('div', { class: 'meter-label', text: 'Draft' }),
           el('div', { class: 'meter wake' }, [this.wakeFill]),
         ]),
-        this.hintChip,
       ]),
     ]);
 
@@ -123,7 +159,7 @@ export class Hud {
     this.vignette = el('div', { class: 'danger-vignette' });
 
     this.root = el('div', { class: 'layer' }, [
-      prompt, tl, tr, bl, bc, this.minimapSlot, this.toastRail,
+      prompt, tl, tr, bl, bc, this.tourPanel, this.minimapSlot, this.toastRail,
     ]);
     document.body.append(this.vignette);
   }
@@ -137,14 +173,19 @@ export class Hud {
     this.vignette.style.display = v ? '' : 'none';
   }
 
+  setMuted(m: boolean): void {
+    this.muteButton.textContent = m ? '🔇' : '🔊';
+    this.muteButton.classList.toggle('muted', m);
+  }
+
+  onHintClick(fn: () => void): void {
+    this.hintChip.addEventListener('click', fn);
+  }
+
   /**
-   * Silhouettes and outlines are drawn with `fill="currentColor"` so the game
-   * can tint them — but an SVG loaded through an `<img>` tag is a separate
-   * document and inherits nothing, so `currentColor` would resolve to black and
-   * the shape would vanish against the dark HUD. A CSS mask paints the element's
-   * own background through the artwork instead, which both keeps the tint and
-   * lets a single file serve the light parchment of Terra and the dark sky of
-   * Expedition. Flags stay as real images: they have their own colours.
+   * Silhouettes and outlines are `fill="currentColor"`, and an SVG in an `<img>`
+   * inherits nothing — it would resolve to black and vanish. A CSS mask paints
+   * the element's own background through the artwork instead.
    */
   private maskShape(url: string, label: string): HTMLElement {
     const node = el('div', { class: 'prompt-image mask', role: 'img', 'aria-label': label });
@@ -153,7 +194,6 @@ export class Hud {
     return node;
   }
 
-  /** Render a new target prompt, including flags, outlines and silhouettes. */
   setTarget(t: LiveTarget, index: number, total: number): void {
     clearChildren(this.promptImageSlot);
     const base = baseUrl();
@@ -161,21 +201,16 @@ export class Hud {
     if (t.image?.type === 'flag' && t.image.iso2) {
       this.promptKicker.textContent = 'WHOSE FLAG IS THIS?';
       this.promptImageSlot.append(el('img', {
-        class: 'prompt-image flag',
-        src: `${base}flags/${t.image.iso2}.svg`,
-        alt: 'A national flag',
+        class: 'prompt-image flag', src: `${base}flags/${t.image.iso2}.svg`, alt: 'A national flag',
       }));
-      this.promptName.textContent = '';
       this.promptName.style.display = 'none';
     } else if (t.image?.type === 'outline' && t.image.iso3) {
       this.promptKicker.textContent = 'WHICH COUNTRY IS THIS?';
-      this.promptImageSlot.append(this.maskShape(`${base}outlines/${t.image.iso3}.svg`, 'The outline of a country'));
-      this.promptName.textContent = '';
+      this.promptImageSlot.append(this.maskShape(`${base}outlines/${t.image.iso3}.svg`, 'A country outline'));
       this.promptName.style.display = 'none';
     } else if (t.image?.type === 'silhouette' && t.image.id) {
       this.promptKicker.textContent = 'FIND THIS LANDMARK';
-      this.promptImageSlot.append(this.maskShape(`${base}silhouettes/${t.image.id}.svg`, 'The silhouette of a landmark'));
-      this.promptName.textContent = '';
+      this.promptImageSlot.append(this.maskShape(`${base}silhouettes/${t.image.id}.svg`, 'A landmark silhouette'));
       this.promptName.style.display = 'none';
     } else {
       this.promptKicker.textContent = t.kind === 'country' ? 'FIND THE COUNTRY'
@@ -190,66 +225,95 @@ export class Hud {
     clearChildren(this.promptMeta);
     this.promptMeta.append(
       el('span', { class: 'pill gold', text: `Tier ${t.tier}` }),
-      el('span', {}, [document.createTextNode('Target '), el('b', { text: String(index + 1) }),
-        document.createTextNode(total > 0 ? ` of ${total}` : '')]),
+      el('span', {}, [
+        document.createTextNode('Target '), el('b', { text: String(index + 1) }),
+        document.createTextNode(total > 0 ? ` of ${total}` : ''),
+      ]),
     );
   }
 
+  /** Show or hide the Grand Tour's list of twenty. */
+  setTourVisible(on: boolean): void {
+    this.tourPanel.hidden = !on;
+  }
+
+  private updateTour(session: Session): void {
+    const all = session.tourAll;
+    if (all.length === 0) return;
+    const signature = all.map((t) => (session.isTourFound(t.id) ? '1' : '0')).join('');
+    if (signature === this.lastTourSignature) return;
+    this.lastTourSignature = signature;
+
+    clearChildren(this.tourList);
+    for (const t of all) {
+      const found = session.isTourFound(t.id);
+      this.tourList.append(el('li', {
+        class: found ? 'found' : '',
+        text: t.image?.type === 'flag' ? `${t.name} (flag)` : t.name,
+      }));
+    }
+  }
+
   /** Per-frame refresh. Reads the session; writes nothing back. */
-  update(session: Session, opts: { totalTargets?: number } = {}): void {
+  update(session: Session): void {
     this.scoreValue.textContent = formatScore(session.score);
     this.scoreSub.textContent = session.streak > 0
       ? `${session.streak} clean · ×${(1 + Math.min(0.5, session.streak * 0.1)).toFixed(1)}`
       : 'no streak';
 
-    if (session.options.mode === 'relay') {
+    const mode = session.options.mode;
+    if (mode === 'relay') {
       this.modeLabel.textContent = 'Time left';
       this.modeValue.textContent = formatClock(session.relayRemaining);
       this.modeValue.style.color = session.relayRemaining < 15 ? 'var(--danger)' : '';
       this.modeSub.textContent = `${session.targetIndex} found`;
-    } else if (session.options.mode === 'daily') {
+    } else if (mode === 'daily') {
       this.modeLabel.textContent = 'Daily run';
       this.modeValue.textContent = `${session.targetIndex}/${session.dailyTotal}`;
       this.modeSub.textContent = formatClock(session.elapsed);
+    } else if (mode === 'tour') {
+      // A stopwatch, not a countdown: the Grand Tour is ranked on how quickly
+      // you finish, and nothing is taken away while you think.
+      this.modeLabel.textContent = 'Grand Tour';
+      this.modeValue.textContent = formatClock(session.elapsed);
+      this.modeSub.textContent = `${session.tourAll.length - session.tourRemaining.length} of ${session.tourAll.length} found`;
+      this.updateTour(session);
     } else {
       this.modeLabel.textContent = 'Elapsed';
       this.modeValue.textContent = formatClock(session.elapsed);
       this.modeSub.textContent = `${session.targetIndex} found · tier ${session.drift.tier}`;
     }
 
-    // Par bar: how much of this target's clock has burned.
+    // --- what this target is still worth ------------------------------------
+    const worth = session.projectedValue();
+    this.promptWorth.textContent = `worth ${formatScore(worth)}`;
+    this.promptWorth.classList.toggle('spent', worth <= 0);
+
     const ratio = session.parSeconds > 0 ? session.targetElapsed / session.parSeconds : 0;
-    this.parFill.style.width = `${Math.min(100, ratio * 100).toFixed(1)}%`;
+    this.parFill.style.width = `${Math.min(100, (ratio / 3) * 100).toFixed(1)}%`;
     this.parFill.classList.toggle('over', ratio > 1);
 
-    // Location readout — free, always on, and the best teaching tool we have.
-    const country = session.locationName;
-    if (country !== this.lastCountry) {
-      this.lastCountry = country;
-      this.whereCountry.textContent = country;
-    }
-    const terrain = session.snake.surface.terrain;
-    const climate = session.snake.surface.climate;
-    // Keyed on both: the climate can change under an unchanged terrain class
-    // (savanna to steppe is all "plains"), and that transition is exactly the
-    // one the snake's colour is about to make.
-    if (terrain !== this.lastTerrain || climate !== this.lastClimate) {
-      this.lastTerrain = terrain;
-      this.lastClimate = climate;
-      this.whereTerrain.textContent = `${TERRAIN_NAME[terrain]} · ${climateLabel(climate)}`;
-    }
-    const cc = hexToCss(climateColor(climate));
-    this.whereSwatch.style.background = cc;
-    this.whereSwatch.style.color = cc;
-
-    // Speed, and what is causing it. Colour-coded because the number alone is
-    // easy to miss mid-corner — green when the ground is helping, red when it
-    // is not.
+    // --- terrain, up top ----------------------------------------------------
     const speed = session.speedReadout();
     this.speedValue.textContent = `×${speed.total.toFixed(2)}`;
-    this.speedValue.style.color = speed.total > 1.04 ? 'var(--accent)'
-      : speed.total < 0.94 ? 'var(--danger)' : 'var(--ink)';
+    const hot = speed.total > 1.04;
+    const cold = speed.total < 0.94;
+    this.speedValue.style.color = hot ? 'var(--accent)' : cold ? 'var(--danger)' : 'var(--ink)';
+    // Bar centred on ×1: right of centre is help, left is drag.
+    const pct = Math.max(0, Math.min(1, (speed.total - 0.5) / 1.0));
+    this.speedBar.style.width = `${Math.abs(pct - 0.5) * 100}%`;
+    this.speedBar.style.left = `${Math.min(pct, 0.5) * 100}%`;
+    this.speedBar.style.background = hot ? 'var(--accent)' : cold ? 'var(--danger)' : 'var(--ink-faint)';
+
+    const terrain = session.snake.surface.terrain;
+    const climate = session.snake.surface.climate;
+    if (terrain !== this.lastTerrain) {
+      this.lastTerrain = terrain;
+      this.speedTerrain.textContent = TERRAIN_NAME[terrain];
+    }
+    // Skip the first entry: it is the terrain, already named in bold above.
     const partsText = speed.parts
+      .slice(1)
       .filter((p) => Math.abs(p.factor - 1) > 0.02)
       .map((p) => `${p.label} ×${p.factor.toFixed(2)}`)
       .join(' · ');
@@ -258,19 +322,29 @@ export class Hud {
       this.speedParts.textContent = partsText || 'no modifiers';
     }
 
+    // --- location, the free geography teacher -------------------------------
+    const country = session.locationName;
+    if (country !== this.lastCountry) {
+      this.lastCountry = country;
+      this.whereCountry.textContent = country;
+    }
+    if (climate !== this.lastClimate) {
+      this.lastClimate = climate;
+      this.whereClimate.textContent = climateLabel(climate);
+    }
+    const cc = hexToCss(climateColor(climate));
+    this.whereSwatch.style.background = cc;
+    this.whereSwatch.style.color = cc;
+
     const cfg = session.snake.cfg;
     this.boostFill.style.width = `${(session.snake.boostStamina / cfg.boostCapacity) * 100}%`;
     this.wakeFill.style.width = `${session.snake.wake.charge * 100}%`;
 
     this.updateHintChip(session);
 
-    // Proximity warning. Only inside three body-widths, so it means something.
     const prox = session.snake.proximityDeg();
-    const danger = prox < cfg.collisionRadiusDeg * 3.2
-      ? 1 - prox / (cfg.collisionRadiusDeg * 3.2)
-      : 0;
+    const danger = prox < cfg.collisionRadiusDeg * 3.2 ? 1 - prox / (cfg.collisionRadiusDeg * 3.2) : 0;
     this.vignette.style.opacity = String(Math.min(0.85, danger * danger));
-    void opts;
   }
 
   private updateHintChip(session: Session): void {
@@ -301,21 +375,14 @@ export class Hud {
       el('div', { class: 'toast-points', text: `+${formatScore(e.breakdown.total)}` }),
       el('div', { class: 'toast-title', text: e.target.name }),
       el('div', { class: 'toast-blurb', text: e.target.blurb }),
-      el('div', { class: 'toast-mults' }, [
-        el('span', {}, [document.createTextNode('speed '), el('b', { text: `×${e.breakdown.speed.toFixed(2)}` })]),
-        el('span', {}, [document.createTextNode('streak '), el('b', { text: `×${e.breakdown.streak.toFixed(1)}` })]),
-        e.breakdown.hintLevel > 0
-          ? el('span', {}, [document.createTextNode('hint '), el('b', { text: `×${e.breakdown.hint.toFixed(2)}` })])
-          : el('span', { text: e.breakdown.beatPar ? 'under par' : 'over par' }),
-      ]),
     ]);
-    this.pushToast(node, 3400);
+    this.pushToast(node, 4200);
   }
 
-  showShip(bonus: number): void {
+  showShip(refill: number): void {
     this.pushToast(el('div', { class: 'toast panel small' }, [
-      el('div', { class: 'toast-title', text: `Cargo swallowed  +${bonus}` }),
-    ]), 1500);
+      el('div', { class: 'toast-title', text: `Cargo swallowed  +${refill.toFixed(1)}s boost` }),
+    ]), 1600);
   }
 
   showHintTaken(level: number, cost: number): void {
@@ -324,7 +391,7 @@ export class Hud {
       : `${this.hintNames[0]} — on the house`;
     this.pushToast(el('div', { class: 'toast panel small' }, [
       el('div', { class: 'toast-title', text: label }),
-    ]), 1700);
+    ]), 1800);
   }
 
   showMessage(text: string, ms = 2000): void {
@@ -335,6 +402,7 @@ export class Hud {
 
   private pushToast(node: HTMLElement, ms: number): void {
     this.toastRail.append(node);
+    while (this.toastRail.childElementCount > 3) this.toastRail.firstElementChild?.remove();
     window.setTimeout(() => {
       node.classList.add('leaving');
       window.setTimeout(() => node.remove(), 400);
@@ -343,6 +411,7 @@ export class Hud {
 
   clearToasts(): void {
     clearChildren(this.toastRail);
+    this.lastTourSignature = '';
   }
 
   dispose(): void {

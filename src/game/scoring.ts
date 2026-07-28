@@ -21,23 +21,32 @@ export const TIER_BASE = [0, 100, 160, 250, 380, 550] as const;
 export const HINT_MULTIPLIER = [1.0, 0.85, 0.6, 0.25] as const;
 export const MAX_HINT_LEVEL = 3;
 
-export const SPEED_MIN = 0.35;
-export const SPEED_MAX = 1.6;
+export const SPEED_MAX = 1.5;
+/** A target is worth nothing once this many multiples of par have elapsed. */
+export const DECAY_PARS = 3;
 export const STREAK_STEP = 0.1;
 export const STREAK_CAP = 1.5;
 
 /** Seconds granted for recognising the prompt before the clock really bites. */
 export const RECOGNITION_GRACE = 2.5;
 
-export function speedMultiplier(actualSeconds: number, parSeconds: number): number {
+/**
+ * How much of a target's value is left, purely as a function of elapsed time.
+ *
+ * Deliberately linear, and deliberately reaching exactly zero: this number is
+ * shown ticking down on the HUD, and a curve that quietly flattens out at some
+ * floor is a countdown that lies. The earlier version floored at ×0.35 to avoid
+ * teaching players to quit a bad round — but that reasoning does not apply
+ * here, because you cannot skip a target. The clock takes the points; finding
+ * the place is still the only way forward. That is a cleaner bargain, and it is
+ * legible at a glance.
+ *
+ * 1.5 at the instant it is set, exactly 1.0 at par, 0 at three times par.
+ */
+export function timeMultiplier(actualSeconds: number, parSeconds: number): number {
   if (parSeconds <= 0) return 1;
-  // Exponent tuned by watching a perfect-knowledge bot play: at 0.55 even
-  // flawless routing only earned ×1.10, so the top half of the range was dead
-  // and mastery paid almost nothing. At 0.8, knowing exactly where you are
-  // going is worth ×1.4 — and a genuine miss still floors out rather than
-  // zeroing, so nobody is taught to quit a bad round.
-  const raw = Math.exp(0.8 * (1 - actualSeconds / parSeconds));
-  return Math.min(SPEED_MAX, Math.max(SPEED_MIN, raw));
+  const t = actualSeconds / parSeconds;
+  return Math.max(0, Math.min(SPEED_MAX, SPEED_MAX * (1 - t / DECAY_PARS)));
 }
 
 export function streakMultiplier(streak: number): number {
@@ -68,7 +77,7 @@ export function scoreCapture(
   streak: number,
 ): CaptureBreakdown {
   const base = TIER_BASE[Math.min(Math.max(tier, 1), 5)];
-  const speed = speedMultiplier(actualSeconds, parSeconds);
+  const speed = timeMultiplier(actualSeconds, parSeconds);
   const hint = hintMultiplier(hintLevel);
   const st = streakMultiplier(streak);
   return {
@@ -84,8 +93,15 @@ export function scoreCapture(
   };
 }
 
-/** Ships are a garnish, not a requirement: capped, flat, and never route-defining. */
-export const SHIP_BONUS = 120;
+/**
+ * Ships pay in fuel, not points.
+ *
+ * A score bonus put them in direct competition with the objective and made the
+ * records table ambiguous — was that a good run or a lucky shipping lane? A
+ * boost refill is a purely tactical prize: valuable when your stamina is empty
+ * and the next target is a continent away, ignorable otherwise.
+ */
+export const SHIP_BOOST_REFILL = 0.55;
 export const SHIP_BOOST_SECONDS = 1.6;
 
 /** How much body a capture adds, in degrees of arc. */

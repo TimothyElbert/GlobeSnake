@@ -3,8 +3,7 @@ import { clamp, signedTurnToward } from './sphere';
 import type { SteerInput } from './snake';
 
 export type InputScheme = 'keyboard' | 'pointer';
-export type GameAction =
-  | 'hint' | 'pause' | 'restart' | 'mute' | 'zoomIn' | 'zoomOut' | 'toggleMap' | 'borders';
+export type GameAction = 'hint' | 'pause' | 'restart' | 'mute' | 'zoomIn' | 'zoomOut';
 
 /**
  * One input manager for all three control schemes.
@@ -87,23 +86,16 @@ export class InputManager {
     }
     if (e.repeat) return;
     this.keys.add(e.code);
-    if (this.isSteeringKey(e.code)) this.scheme = 'keyboard';
 
     switch (e.code) {
       case 'Space': case 'KeyH': this.emit('hint'); break;
       case 'Escape': case 'KeyP': this.emit('pause'); break;
       case 'KeyR': this.emit('restart'); break;
       case 'KeyM': this.emit('mute'); break;
-      case 'KeyT': this.emit('toggleMap'); break;
-      case 'KeyB': this.emit('borders'); break;
       case 'PageUp': case 'Equal': this.emit('zoomIn'); break;
       case 'PageDown': case 'Minus': this.emit('zoomOut'); break;
     }
   };
-
-  private isSteeringKey(code: string): boolean {
-    return code === 'ArrowLeft' || code === 'ArrowRight' || code === 'KeyA' || code === 'KeyD';
-  }
 
   private onKeyUp = (e: KeyboardEvent): void => { this.keys.delete(e.code); };
   private onBlur = (): void => { this.keys.clear(); this.pointerDown = false; };
@@ -172,33 +164,34 @@ export class InputManager {
    * `position`/`heading` are the snake's unit vectors; `turnRateRad` is how far
    * it could turn this frame, used to normalise the pursuit error.
    */
+  /**
+   * Produce this frame's steering command.
+   *
+   * Mouse only, and no brake. The game had five ways to influence the snake —
+   * two turn keys, boost, brake, and the cursor — and in practice nobody used
+   * more than one of them; the extra bindings were something to explain on the
+   * start card rather than something to play with. Pursuit steering plus a
+   * hold-to-boost is the whole control surface now, which also means the
+   * keyboard and touch schemes stopped being two things to keep in sync.
+   */
   sample(position: Vector3, heading: Vector3, globeRadius: number, turnRateRad: number): SteerInput {
     const o = this.out;
     o.turn = 0;
     o.boost = false;
     o.brake = false;
 
-    if (this.scheme === 'pointer' || this.preferPointer) {
-      if (this.computeAim(position, globeRadius)) {
-        const err = signedTurnToward(position, heading, this.hitPoint);
-        // Normalise by a couple of frames' worth of turn so the snake commits
-        // fully to a real correction but does not jitter on sub-degree error.
-        o.turn = clamp(err / Math.max(turnRateRad * 2, 1e-4), -1, 1);
-        if (Math.abs(err) < 0.008) o.turn = 0;
+    if (!this.computeAim(position, globeRadius)) return o;
 
-        if (this.aimScreenDistance < 0.15) o.brake = true;
-        else if (this.aimScreenDistance > 0.5) o.boost = true;
-        if (this.pointerDown) { o.boost = true; o.brake = false; }
-        return o;
-      }
-      if (!this.hasAim) this.scheme = 'keyboard';
-    }
+    const err = signedTurnToward(position, heading, this.hitPoint);
+    // Normalise by a couple of frames' worth of turn so the snake commits fully
+    // to a real correction but does not jitter on sub-degree error.
+    o.turn = clamp(err / Math.max(turnRateRad * 2, 1e-4), -1, 1);
+    if (Math.abs(err) < 0.008) o.turn = 0;
 
-    const left = this.keys.has('ArrowLeft') || this.keys.has('KeyA');
-    const right = this.keys.has('ArrowRight') || this.keys.has('KeyD');
-    if (left !== right) o.turn = left ? -1 : 1;
-    o.boost = this.keys.has('ArrowUp') || this.keys.has('KeyW') || this.keys.has('ShiftLeft');
-    o.brake = this.keys.has('ArrowDown') || this.keys.has('KeyS');
+    // Reaching far ahead of the snake asks it to hurry; holding the button
+    // asks outright.
+    if (this.aimScreenDistance > 0.5) o.boost = true;
+    if (this.pointerDown) o.boost = true;
     return o;
   }
 

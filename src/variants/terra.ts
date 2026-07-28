@@ -35,35 +35,33 @@ void bootstrap({
   chrome: {
     name: 'Terra Incognita',
     tagline: 'Draw it yourself',
+    short: 'A blank globe, a pen for a snake, and no coastlines until you have been there.',
     blurb:
       'A globe of blank vellum, faintly embossed with coastlines, and a snake that is really a pen. ' +
       'Everywhere you travel the world inks itself in behind you — washes, hachures, a darkening shore. ' +
       'The line never dries and never fades: by the end of a long run the map you have drawn is also the ' +
       'maze you have to survive. And there is no pin here. Only a bearing, a distance, and your nerve.',
     rules: [
-      'Yes — the line really does go on forever. Only the last stretch is snake; behind it the ink dries into map, and every bit of it is still a wall. Plan the whole run, not the next minute.',
+      'You start on blank vellum. Coastlines only appear where you have travelled, so finding your bearings *is* the game.',
       'Hints give bearing and range only. No search circle, no pin, no shortcut to the answer.',
-      'Coastlines are always visible. You are drawing the world, not discovering whether it exists.',
-      'The map keeps what you drew. Your best route card is the one worth framing.',
+      'How much of the planet you uncovered is recorded separately from your score — a big score in one corner is a different run from a small one that crossed an ocean.',
+      'Grand Tour is the hard one: twenty places named up front, any order you like, and a line that never lifts.',
     ],
     hintNames: ['Bearing & range', 'Tighter bearing'],
   },
   maxHintLevel: 2,
   hintNames: ['Bearing & range', 'Tighter bearing'],
+  trackExploration: true,
 
   // Slower and more deliberate: this world is for thinking, and a permanent
   // trail punishes a wandering line far more than a vacating tail does.
+  // A normal, vacating tail. The indelible line moved to the Grand Tour, where
+  // knowing the whole list up front is what makes an unforgiving trail a
+  // planning problem rather than an ambush.
   snake: {
     baseSpeedDeg: 3.1,
-    turnRateDeg: 120,
-    trailMode: 'permanent',
-    startBodyDeg: 6,
-    // Irrelevant under `permanent`: nothing is ever released, so the body is
-    // simply everywhere you have been.
-    growthPerCaptureDeg: 0,
-    // Matched to the ribbon's vertex budget below — the drawn body and the
-    // lethal body must be the same object, or you die to something invisible.
-    // 40,000 nodes is roughly thirteen laps of the planet, or ~25 minutes.
+    turnRateDeg: 105,
+    startBodyDeg: 9,
     capacity: 40000,
   },
   globe: {
@@ -72,7 +70,13 @@ void bootstrap({
     atmosphere: 0.42,
     atmosphereColor: 0xc9a97a,
     segments: [256, 128],
+    // A flat globe. Relief shading on unrevealed vellum would show you where
+    // the mountains are before you had been there, which is precisely what this
+    // world is not supposed to tell you. Terrain is conveyed by hachures, and
+    // only where the map has been drawn.
+    relief: 0,
   },
+  relief: 0,
   ribbon: {
     rimColor: 0x8a6a45,
     scalePitch: 1400,

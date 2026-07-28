@@ -28,6 +28,7 @@ void bootstrap({
   chrome: {
     name: 'Tempest',
     tagline: 'The wind takes a side',
+    short: 'The same planet with the atmosphere switched on — ride the jet streams.',
     blurb:
       'The same planet, alive with weather. Rivers of air run east along the jet streams; the great ocean ' +
       'gyres turn beneath you; hurricanes wander the tropics with real teeth. Every current is drawn on the ' +

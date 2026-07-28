@@ -15,6 +15,7 @@ void bootstrap({
   chrome: {
     name: 'Expedition',
     tagline: 'The canonical world',
+    short: 'The real Earth, played straight. Start here.',
     blurb:
       'A snake crawling on the real Earth. You are given a place — a country, a city, a landmark, ' +
       'sometimes only a flag — and you have to get your head there before the clock eats the points. ' +

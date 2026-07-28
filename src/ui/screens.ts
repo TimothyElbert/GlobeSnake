@@ -1,4 +1,6 @@
 import { dailyNumber } from '@core/loop';
+import type { MusicStyle } from '@audio/audio';
+import { collect } from '@game/records';
 import { formatClock, formatScore } from '@game/scoring';
 import type { RunLogEntry, GameMode } from '@game/session';
 import type { Deck } from '@game/targets';
@@ -24,11 +26,25 @@ export interface StartChoice {
 export interface VariantChrome {
   name: string;
   tagline: string;
+  /** One line, always visible above the tabs. */
+  short?: string;
   blurb: string;
   /** Extra lines describing what this variant changes. */
   rules?: string[];
   hintNames?: string[];
 }
+
+const MUSIC_INFO: Record<MusicStyle, { label: string; desc: string }> = {
+  score: {
+    label: 'Score',
+    desc: 'A slow generative piece that retunes to the ground under the snake. Synthesised live, so it reacts.',
+  },
+  drone: {
+    label: 'Drone',
+    desc: 'The original sustained pad — no melody, no movement. Better for concentrating.',
+  },
+  off: { label: 'Off', desc: 'No music. Sound effects still play unless you mute.' },
+};
 
 const MODE_INFO: Record<GameMode, { label: string; desc: string }> = {
   endless: {
@@ -37,11 +53,15 @@ const MODE_INFO: Record<GameMode, { label: string; desc: string }> = {
   },
   daily: {
     label: 'Daily Run',
-    desc: 'Ten targets, the same ten for everyone on Earth today. Ends with a route card you can share.',
+    desc: 'Ten targets, one at a time, the same ten for everyone in this world today.',
   },
   relay: {
     label: 'Relay',
     desc: 'Two minutes on the clock. Every find buys you eight more seconds. It never gets easier.',
+  },
+  tour: {
+    label: 'Grand Tour',
+    desc: 'Twenty places, named up front, in any order you like — on a line that never lifts. Ranked on how fast you finish.',
   },
 };
 
@@ -75,16 +95,23 @@ export class StartScreen {
   private deck: Deck = 'standard';
   private readonly modeButtons = new Map<GameMode, HTMLElement>();
   private readonly deckButtons = new Map<Deck, HTMLElement>();
+  private readonly musicButtons = new Map<MusicStyle, HTMLElement>();
+  private readonly tabs = new Map<string, { tab: HTMLElement; panel: HTMLElement }>();
+  private recordsPanel!: HTMLElement;
   private readonly bestLine: HTMLElement;
+  private music: MusicStyle = 'score';
 
   constructor(
     private readonly chrome: VariantChrome,
     private readonly onPlay: (choice: StartChoice) => void,
+    private readonly onMusic?: (style: MusicStyle) => void,
+    music: MusicStyle = 'score',
   ) {
+    this.music = music;
     this.bestLine = el('div', { class: 'stat-sub' });
 
     const modeGrid = el('div', { class: 'choices cols-3' });
-    for (const m of ['endless', 'daily', 'relay'] as GameMode[]) {
+    for (const m of ['endless', 'daily', 'relay', 'tour'] as GameMode[]) {
       const info = MODE_INFO[m];
       const btn = el('button', {
         class: 'choice',
@@ -92,7 +119,10 @@ export class StartScreen {
         'aria-pressed': m === this.mode,
         onclick: () => this.selectMode(m),
       }, [
-        el('div', { class: 'choice-title', text: m === 'daily' ? `${info.label} #${dailyNumber()}` : info.label }),
+        el('div', {
+          class: 'choice-title',
+          text: m === 'daily' || m === 'tour' ? `${info.label} #${dailyNumber()}` : info.label,
+        }),
         el('div', { class: 'choice-desc', text: info.desc }),
       ]);
       this.modeButtons.set(m, btn);
@@ -121,48 +151,169 @@ export class StartScreen {
         el('span', { text }),
       ]);
 
-    const sheet = el('div', { class: 'sheet panel' }, [
-      el('div', { class: 'pill gold', text: chrome.tagline }),
-      el('h1', { text: chrome.name }),
-      el('p', { class: 'lede', text: chrome.blurb }),
-
+    // --- tab panels ---------------------------------------------------------
+    const playPanel = el('div', { class: 'tab-panel' }, [
       el('h2', { text: 'Mode' }),
       modeGrid,
       el('h2', { text: 'Difficulty' }),
       deckGrid,
+    ]);
 
-      el('h2', { text: 'Controls' }),
+    const worldPanel = el('div', { class: 'tab-panel', hidden: true }, [
+      el('p', { class: 'lede', text: chrome.blurb }),
+      ...(chrome.rules?.length
+        ? [el('ul', { class: 'lede' }, chrome.rules.map((r) => el('li', { text: r })))]
+        : []),
+    ]);
+
+    const controlsPanel = el('div', { class: 'tab-panel', hidden: true }, [
+      el('p', { class: 'lede', text:
+        'Steer with the mouse — the snake chases your cursor, and how far ahead you reach is your throttle. ' +
+        'That is the whole control surface.' }),
       el('div', { class: 'keys' }, [
-        keyRow(['←', '→'], 'Turn'),
-        keyRow(['↑'], 'Boost (costs stamina)'),
-        keyRow(['↓'], 'Brake — turns tighter'),
-        keyRow(['Space'], chrome.hintNames ? 'Hint (costs points)' : 'Hint (costs points)'),
         keyRow(['Mouse'], 'Steer toward the cursor'),
+        keyRow(['Hold'], 'Boost (costs stamina)'),
+        keyRow(['Space'], 'Hint — costs points from this target'),
         keyRow(['Wheel'], 'Zoom in and out'),
-        keyRow(['B'], 'Country borders (on by default)'),
         keyRow(['Esc'], 'Pause'),
         keyRow(['M'], 'Mute'),
         keyRow(['R'], 'Restart'),
       ]),
+    ]);
 
-      ...(chrome.rules?.length
-        ? [el('h2', { text: 'In this world' }),
-           el('ul', { class: 'lede' }, chrome.rules.map((r) => el('li', { text: r })))]
-        : []),
+    this.recordsPanel = el('div', { class: 'tab-panel', hidden: true });
 
+    const soundPanel = el('div', { class: 'tab-panel', hidden: true }, [
+      el('h2', { text: 'Music' }),
+      el('div', { class: 'choices cols-3' }, (['score', 'drone', 'off'] as MusicStyle[]).map((s) => {
+        const btn = el('button', {
+          class: 'choice', type: 'button', 'aria-pressed': s === this.music,
+          onclick: () => this.selectMusic(s),
+        }, [
+          el('div', { class: 'choice-title', text: MUSIC_INFO[s].label }),
+          el('div', { class: 'choice-desc', text: MUSIC_INFO[s].desc }),
+        ]);
+        this.musicButtons.set(s, btn);
+        return btn;
+      })),
+      el('p', { class: 'lede', text: 'Sound effects follow the mute button in the corner, or M.' }),
+    ]);
+
+    const creditsPanel = el('div', { class: 'tab-panel', hidden: true }, [
+      el('p', { class: 'lede', html:
+        'Every asset here is public domain or permissively licensed, baked in at build time. ' +
+        'Once the page has loaded, the game makes no network requests at all — there is no backend, ' +
+        'no account and no tracking, and your records live only in this browser.' }),
+      el('ul', { class: 'lede' }, [
+        el('li', { html: 'Imagery and elevation — NASA Visible Earth: Blue&nbsp;Marble, Earth at Night, GEBCO_08. Public domain.' }),
+        el('li', { html: 'Coastlines, borders, rivers, lakes, glaciers — Natural&nbsp;Earth. Public domain.' }),
+        el('li', { html: 'Climate — Köppen-Geiger classification, Beck et&nbsp;al. (2018). CC&nbsp;BY&nbsp;4.0.' }),
+        el('li', { html: 'Flags — flag-icons. MIT. Landmark silhouettes and country outlines drawn for this game.' }),
+        el('li', { html: 'Engine — Three.js. MIT. Music and sound synthesised in the browser.' }),
+      ]),
+    ]);
+
+    const panels: Record<string, HTMLElement> = {
+      Play: playPanel,
+      'This world': worldPanel,
+      Controls: controlsPanel,
+      Records: this.recordsPanel,
+      Sound: soundPanel,
+      Credits: creditsPanel,
+    };
+
+    const tabBar = el('div', { class: 'tabs', role: 'tablist' });
+    for (const [name, panel] of Object.entries(panels)) {
+      const tab = el('button', {
+        class: 'tab', type: 'button', role: 'tab',
+        'aria-selected': name === 'Play',
+        onclick: () => this.selectTab(name),
+      }, [name]);
+      this.tabs.set(name, { tab, panel });
+      tabBar.append(tab);
+    }
+
+    const sheet = el('div', { class: 'sheet panel' }, [
+      el('div', { class: 'pill gold', text: chrome.tagline }),
+      el('h1', { text: chrome.name }),
+      el('p', { class: 'lede', text: chrome.short ?? chrome.blurb }),
+      tabBar,
+      ...Object.values(panels),
       el('div', { class: 'btn-row' }, [
         el('button', { class: 'btn', type: 'button', text: 'Begin', onclick: () => this.play() }),
         el('a', { class: 'btn ghost', href: '../', text: 'All three worlds' }),
         this.bestLine,
       ]),
-
-      el('p', { class: 'credit', html:
-        'Imagery: NASA Blue Marble &amp; GEBCO (public domain) · Borders: Natural Earth (public domain) · ' +
-        'Climate: Köppen-Geiger, Beck et al. (CC BY 4.0) · Flags: flag-icons (MIT)' }),
     ]);
 
     this.root = el('div', { class: 'overlay' }, [sheet]);
     this.refreshBest();
+  }
+
+  private selectTab(name: string): void {
+    for (const [key, { tab, panel }] of this.tabs) {
+      const on = key === name;
+      tab.setAttribute('aria-selected', String(on));
+      panel.hidden = !on;
+    }
+    if (name === 'Records') this.renderRecords();
+  }
+
+  private selectMusic(s: MusicStyle): void {
+    this.music = s;
+    for (const [k, b] of this.musicButtons) b.setAttribute('aria-pressed', String(k === s));
+    this.onMusic?.(s);
+  }
+
+  private renderRecords(): void {
+    clearChildren(this.recordsPanel);
+    const view = collect(this.chrome.name, ['explorer', 'standard', 'expert']);
+
+    if (view.daily.length === 0 && view.free.length === 0) {
+      this.recordsPanel.append(el('p', { class: 'lede', text:
+        'Nothing yet. Finish a run and it will appear here — these are stored in this browser only.' }));
+      return;
+    }
+
+    if (view.daily.length) {
+      this.recordsPanel.append(el('h2', { text: 'Daily & Grand Tour' }));
+      const rows = view.daily.map(({ mode, day, rec }) => el('tr', {}, [
+        el('td', { text: day }),
+        el('td', { class: 'name', text: MODE_INFO[mode].label }),
+        el('td', { text: `${formatScore(rec.firstScore)} · ${formatClock(rec.firstSeconds)}` }),
+        el('td', { text: `${formatScore(rec.bestScore)} · ${formatClock(rec.bestSeconds)}` }),
+        el('td', { class: 'pts', text: rec.bestCompletedSeconds > 0
+          ? formatClock(rec.bestCompletedSeconds)
+          : `${rec.bestFound} found` }),
+      ]));
+      this.recordsPanel.append(el('table', { class: 'runlog' }, [
+        el('thead', {}, [el('tr', {}, [
+          el('th', { text: 'Day' }), el('th', { text: 'Mode' }),
+          el('th', { text: 'First' }), el('th', { text: 'Best' }),
+          el('th', { text: 'Completed' }),
+        ])]),
+        el('tbody', {}, rows),
+      ]));
+    }
+
+    if (view.free.length) {
+      this.recordsPanel.append(el('h2', { text: 'Free play' }));
+      const rows = view.free.map(({ mode, deck, rec }) => el('tr', {}, [
+        el('td', { class: 'name', text: MODE_INFO[mode].label }),
+        el('td', { text: DECKS[deck].label }),
+        el('td', { text: `${rec.bestFound} found` }),
+        el('td', { text: formatClock(rec.bestSeconds) }),
+        el('td', { text: rec.bestExplored > 0 ? `${Math.round(rec.bestExplored * 100)}% seen` : '—' }),
+        el('td', { class: 'pts', text: formatScore(rec.bestScore) }),
+      ]));
+      this.recordsPanel.append(el('table', { class: 'runlog' }, [
+        el('thead', {}, [el('tr', {}, [
+          el('th', { text: 'Mode' }), el('th', { text: 'Deck' }), el('th', { text: 'Longest' }),
+          el('th', { text: 'Survived' }), el('th', { text: 'Explored' }), el('th', { text: 'Best score' }),
+        ])]),
+        el('tbody', {}, rows),
+      ]));
+    }
   }
 
   private selectMode(m: GameMode): void {
@@ -226,6 +377,8 @@ export interface SummaryData {
   traceLat: number[];
   traceLon: number[];
   traceClimate: number[];
+  explored: number;
+  completed: boolean;
 }
 
 export class SummaryScreen {
@@ -249,21 +402,31 @@ export class SummaryScreen {
 
     const title = data.died
       ? 'You caught yourself'
-      : data.mode === 'relay' ? 'Time' : 'Expedition complete';
+      : data.mode === 'relay' ? 'Time'
+      : data.mode === 'tour' ? (data.completed ? 'Grand Tour complete' : 'Tour abandoned')
+      : 'Expedition complete';
     const lede = data.died
       ? 'The one rule of snake, on a planet-sized board.'
       : data.mode === 'daily'
-        ? `Daily Run #${dailyNumber()} — everyone on Earth got these ten, in this order.`
-        : 'The clock has run out. The route stands.';
+        ? `Daily Run #${dailyNumber()} — everyone playing this world today got these ten, in this order.`
+        : data.mode === 'tour'
+          ? `All twenty, in ${formatClock(data.elapsed)}. That is the number to beat.`
+          : 'The clock has run out. The route stands.';
 
     this.body.append(
       el('div', { class: 'pill gold', text: data.variant }),
       el('h1', { text: title }),
       el('p', { class: 'lede', text: lede }),
       el('div', { class: 'score-hero' }, [
-        el('span', { class: 'n', text: formatScore(data.score) }),
-        el('span', { class: 'best', text: isRecord ? 'a new personal best' : `best ${formatScore(best)}` }),
+        el('span', { class: 'n', text: data.mode === 'tour' ? formatClock(data.elapsed) : formatScore(data.score) }),
+        el('span', { class: 'best', text: data.mode === 'tour'
+          ? `${data.log.length} of 20 · ${formatScore(data.score)} points`
+          : isRecord ? 'a new personal best' : `best ${formatScore(best)}` }),
       ]),
+      ...(data.explored > 0.001
+        ? [el('p', { class: 'lede', text:
+            `You uncovered ${(data.explored * 100).toFixed(1)}% of the planet — recorded separately from your score.` })]
+        : []),
     );
 
     if (data.log.length) {
