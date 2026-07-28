@@ -3,7 +3,7 @@ import {
 } from 'three';
 import { GameLoop, todaySeed } from '@core/loop';
 import { InputManager } from '@core/input';
-import { WorldData, type Terrain } from '@core/world';
+import { RELIEF_SCALE, WorldData, type Terrain } from '@core/world';
 import { DEFAULT_SNAKE_CONFIG, type SnakeConfig } from '@core/snake';
 import { Globe, type GlobeOptions } from '@render/globe';
 import { SnakeRibbon, type RibbonOptions } from '@render/snakeRibbon';
@@ -149,6 +149,23 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   let time = 0;
   let lowQuality = false;
 
+  // Persisted view preferences. Borders default ON: this is a game about
+  // recognising countries, and a player who cannot see where one ends is being
+  // asked to do it with a hand tied.
+  const pref = <T,>(key: string, fallback: T): T => {
+    try {
+      const raw = localStorage.getItem(`globesnake:pref:${key}`);
+      return raw === null ? fallback : (JSON.parse(raw) as T);
+    } catch { return fallback; }
+  };
+  const setPref = (key: string, value: unknown): void => {
+    try { localStorage.setItem(`globesnake:pref:${key}`, JSON.stringify(value)); } catch { /* private mode */ }
+  };
+
+  let bordersOn = pref('borders', true);
+  camera.setZoom(pref('zoom', camera.zoom));
+  globe.setBorders(bordersOn);
+
   // --- screens --------------------------------------------------------------
 
   const start = new StartScreen(config.chrome, (choice) => {
@@ -186,6 +203,13 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   // --- run lifecycle --------------------------------------------------------
 
   function beginRun(): void {
+    // The fleet belongs to the Session, so it is rebuilt every run and has to
+    // be re-parented into the scene each time. Without this the ships were
+    // simulated, collidable and drawn on the minimap while being completely
+    // absent from the globe — which read as "ships are invisible" rather than
+    // "ships were never in the scene graph".
+    if (session) scene.remove(session.ships.group);
+
     const seed = mode === 'daily' ? todaySeed() : undefined;
     session = new Session(world, ALL_TARGETS, {
       mode, deck, seed,
@@ -193,6 +217,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
       maxHintLevel: config.maxHintLevel,
     });
     ctx = { scene, renderer, camera, globe, ribbon, world, session, hud, audio, input, time };
+    scene.add(session.ships.group);
 
     session.setEvents({
       onTarget: (t, i) => {
@@ -203,7 +228,10 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
       onCapture: (e) => {
         hud.showCapture(e);
         audio.capture(e.target.tier, session!.streak);
-        capturePin.setPosition(e.target.position);
+        capturePin.setPosition(
+          e.target.position,
+          world.reliefAt(e.target.position) * RELIEF_SCALE + 0.005,
+        );
         captureFlash = 2.2;
         config.onCapture?.(ctx!);
       },
@@ -217,8 +245,12 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     });
 
     session.start();
-    globe.setBorders(session.deckRule.showBorders);
-    camera.reset(session.snake.position, session.snake.heading);
+    globe.setBorders(bordersOn);
+    camera.reset(
+      session.snake.position,
+      session.snake.heading,
+      world.reliefAt(session.snake.position) * RELIEF_SCALE,
+    );
     hud.clearToasts();
     hud.setVisible(true);
     audio.revive();
@@ -264,8 +296,14 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     const m = audio.toggleMute();
     hud.showMessage(m ? 'Muted' : 'Sound on', 1100);
   });
-  input.on('zoomIn', () => camera.nudgeZoom(-0.11));
-  input.on('zoomOut', () => camera.nudgeZoom(0.11));
+  input.on('zoomIn', () => { camera.nudgeZoom(-0.09); setPref('zoom', camera.zoomWanted); });
+  input.on('zoomOut', () => { camera.nudgeZoom(0.09); setPref('zoom', camera.zoomWanted); });
+  input.on('borders', () => {
+    bordersOn = !bordersOn;
+    globe.setBorders(bordersOn);
+    setPref('borders', bordersOn);
+    hud.showMessage(bordersOn ? 'Borders on' : 'Borders off', 1100);
+  });
 
   window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -296,7 +334,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
       if (country > 0) globe.highlightCountry(country, 1);
     }
     if (level >= 3) {
-      pin.setPosition(s.target.position);
+      pin.setPosition(s.target.position, world.reliefAt(s.target.position) * RELIEF_SCALE + 0.004);
       pin.setColor(0xffc94a);
       pin.setOpacity(1);
     }
@@ -336,10 +374,11 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
 
       if (session) {
         const s = session;
+        const ground = world.reliefAt(s.snake.position) * RELIEF_SCALE;
         ribbon.update(s.snake, globe.sun, time);
-        head.update(s.snake.position, s.snake.heading, s.snake.surface.climate, 0.0035, time);
+        head.update(s.snake.position, s.snake.heading, s.snake.surface.climate, ground + 0.0035, time);
         head.setEyeGlow(s.snake.wake.active);
-        camera.update(s.snake.position, s.snake.heading, frameDt, s.snake.speedScale);
+        camera.update(s.snake.position, s.snake.heading, frameDt, s.snake.speedScale, ground);
         applyHints(s);
 
         if (s.phase === 'playing' || s.phase === 'captured') {

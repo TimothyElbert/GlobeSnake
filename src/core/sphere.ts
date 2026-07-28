@@ -11,11 +11,23 @@ import { Vector3 } from 'three';
  * Coordinate convention (used identically by the shaders, so visuals and physics
  * cannot drift apart):
  *
- *   x = cos(lat) * cos(lon)
- *   y = sin(lat)
- *   z = cos(lat) * sin(lon)
+ *   x =  cos(lat) * cos(lon)
+ *   y =  sin(lat)
+ *   z = -cos(lat) * sin(lon)
  *
  * so +y is the north pole, and lon 0 (Greenwich) points along +x.
+ *
+ * That minus sign on z is load-bearing. Without it the (east, north, up) frame
+ * comes out left-handed, and because WebGL's world is right-handed the result
+ * is a perfectly self-consistent globe that renders as a *mirror image* of
+ * Earth — every country correctly placed relative to its neighbours, the whole
+ * thing flipped east for west. Every lat/lon ⇄ vector conversion has to agree
+ * on it, which is why the inverses below and the inlined copies in the world
+ * sampler, route grid, minimap, ink map and shaders all carry the same
+ * negation. With it, east is `north × up` rather than `up × north` — that is
+ * why the cross products in turn(), bearingDeg() and signedTurnToward() are
+ * ordered the way they are, and flipping one without the others silently
+ * reverses steering.
  */
 
 export const EARTH_RADIUS_KM = 6371;
@@ -31,12 +43,12 @@ export function fromLatLon(latDeg: number, lonDeg: number, out = new Vector3()):
   const lat = latDeg * DEG;
   const lon = lonDeg * DEG;
   const cl = Math.cos(lat);
-  return out.set(cl * Math.cos(lon), Math.sin(lat), cl * Math.sin(lon));
+  return out.set(cl * Math.cos(lon), Math.sin(lat), -cl * Math.sin(lon));
 }
 
 /** Returns [latDeg, lonDeg]. Allocates a 2-tuple; not for the hot path. */
 export function toLatLon(p: Vector3): [number, number] {
-  return [Math.asin(clamp(p.y, -1, 1)) * RAD, Math.atan2(p.z, p.x) * RAD];
+  return [Math.asin(clamp(p.y, -1, 1)) * RAD, Math.atan2(-p.z, p.x) * RAD];
 }
 
 export function latOf(p: Vector3): number {
@@ -44,7 +56,7 @@ export function latOf(p: Vector3): number {
 }
 
 export function lonOf(p: Vector3): number {
-  return Math.atan2(p.z, p.x) * RAD;
+  return Math.atan2(-p.z, p.x) * RAD;
 }
 
 /**
@@ -68,10 +80,11 @@ export function step(p: Vector3, h: Vector3, theta: number): void {
 export function turn(p: Vector3, h: Vector3, angle: number): void {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
-  // r = p × h is a unit vector because p ⊥ h and both are unit.
-  const rx = p.y * h.z - p.z * h.y;
-  const ry = p.z * h.x - p.x * h.z;
-  const rz = p.x * h.y - p.y * h.x;
+  // r = h × p is "to the right of the heading", and is a unit vector because
+  // h ⊥ p and both are unit. (h × p, not p × h — see the handedness note above.)
+  const rx = h.y * p.z - h.z * p.y;
+  const ry = h.z * p.x - h.x * p.z;
+  const rz = h.x * p.y - h.y * p.x;
   h.set(h.x * c + rx * s, h.y * c + ry * s, h.z * c + rz * s);
 }
 
@@ -118,7 +131,7 @@ export function tangentToward(p: Vector3, q: Vector3, out = new Vector3()): Vect
  */
 export function signedTurnToward(p: Vector3, h: Vector3, q: Vector3): number {
   tangentToward(p, q, _b);
-  _c.copy(p).cross(h); // right-hand normal in the tangent plane
+  _c.copy(h).cross(p); // "right of the heading" in the tangent plane
   return Math.atan2(_c.dot(_b), h.dot(_b));
 }
 
@@ -129,7 +142,7 @@ export function bearingDeg(p: Vector3, q: Vector3): number {
   _a.set(0, 1, 0).addScaledVector(p, -p.y);
   if (_a.lengthSq() < 1e-12) return 0; // standing on a pole
   _a.normalize();
-  _c.copy(p).cross(_a); // east
+  _c.copy(_a).cross(p); // east = north × up
   const deg = Math.atan2(_c.dot(_b), _a.dot(_b)) * RAD;
   return (deg + 360) % 360;
 }

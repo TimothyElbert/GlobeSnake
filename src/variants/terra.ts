@@ -41,7 +41,7 @@ void bootstrap({
       'The line never dries and never fades: by the end of a long run the map you have drawn is also the ' +
       'maze you have to survive. And there is no pin here. Only a bearing, a distance, and your nerve.',
     rules: [
-      'Your trail is permanent. Nothing you draw ever goes away — plan the whole run, not the next minute.',
+      'Yes — the line really does go on forever. Only the last stretch is snake; behind it the ink dries into map, and every bit of it is still a wall. Plan the whole run, not the next minute.',
       'Hints give bearing and range only. No search circle, no pin, no shortcut to the answer.',
       'Coastlines are always visible. You are drawing the world, not discovering whether it exists.',
       'The map keeps what you drew. Your best route card is the one worth framing.',
@@ -73,7 +73,16 @@ void bootstrap({
     atmosphereColor: 0xc9a97a,
     segments: [256, 128],
   },
-  ribbon: { rimColor: 0x8a6a45, width: 0.0072, scalePitch: 1400, maxNodes: 40000 },
+  ribbon: {
+    rimColor: 0x8a6a45,
+    scalePitch: 1400,
+    maxNodes: 40000,
+    // The last ~12° of arc is the pen; everything older has dried into map.
+    dryAfterNodes: 100,
+    dryFadeNodes: 70,
+    dryWidth: 0.5,
+    dryColor: 0x5a3d22,
+  },
   starBrightness: 0.35,
   sunSpeed: 0,
   defaultDeck: 'standard',
@@ -103,9 +112,11 @@ void bootstrap({
       const steps = Math.max(1, Math.min(8, Math.ceil(moved / 0.35)));
       for (let i = 1; i <= steps; i++) {
         _lerp.copy(lastStamp).lerp(head, i / steps).normalize();
-        // A wide soft nib for the wash, a tight dark one for the line itself.
-        ink.stamp(ctx.renderer, _lerp, 5.5, 0.10);
-        ink.stamp(ctx.renderer, _lerp, 1.6, 0.30);
+        // A modest wash and a decisive line. The first cut used a very wide,
+        // very soft nib, which left a half-inked smudge rather than a drawn
+        // map — partial reveal reads as a stain, not as cartography.
+        ink.stamp(ctx.renderer, _lerp, 4.5, 0.30);
+        ink.stamp(ctx.renderer, _lerp, 1.4, 0.5);
       }
       lastStamp.copy(head);
       stampAccum = 0;

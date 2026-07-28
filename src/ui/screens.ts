@@ -138,6 +138,8 @@ export class StartScreen {
         keyRow(['↓'], 'Brake — turns tighter'),
         keyRow(['Space'], chrome.hintNames ? 'Hint (costs points)' : 'Hint (costs points)'),
         keyRow(['Mouse'], 'Steer toward the cursor'),
+        keyRow(['Wheel'], 'Zoom in and out'),
+        keyRow(['B'], 'Country borders (on by default)'),
         keyRow(['Esc'], 'Pause'),
         keyRow(['M'], 'Mute'),
         keyRow(['R'], 'Restart'),

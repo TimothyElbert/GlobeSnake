@@ -102,7 +102,7 @@ export class RouteGrid {
 
   private cellOf(p: Vector3): number {
     const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) * (180 / Math.PI);
-    const lon = Math.atan2(p.z, p.x) * (180 / Math.PI);
+    const lon = Math.atan2(-p.z, p.x) * (180 / Math.PI);
     let r = Math.floor((90 - lat) / GRID_DEG);
     let c = Math.floor((lon + 180) / GRID_DEG);
     if (r < 0) r = 0; else if (r >= ROWS) r = ROWS - 1;

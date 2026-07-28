@@ -35,7 +35,7 @@ function basis(p: Vector3): void {
   } else {
     _north.normalize();
   }
-  _east.copy(p).cross(_north).normalize();
+  _east.copy(_north).cross(p).normalize(); // east = north × up
 }
 
 function gauss(x: number, sigma: number): number {
@@ -166,7 +166,7 @@ export class WindField {
     u -= this.trade * gauss(lat, 13);
 
     // A slow meridional wobble so the bands are ribbons, not stripes.
-    let v = 0.22 * Math.sin(Math.atan2(p.z, p.x) * 3 + this.time * 0.08) * gauss(lat, 60);
+    let v = 0.22 * Math.sin(Math.atan2(-p.z, p.x) * 3 + this.time * 0.08) * gauss(lat, 60);
 
     // Turbulence from cheap value noise, biased small.
     const n1 = noise3(p.x * 7.3, p.y * 7.3, p.z * 7.3 + this.time * 0.05) - 0.5;
@@ -186,7 +186,7 @@ export class WindField {
         _tangential.copy(g.pos).addScaledVector(p, -p.dot(g.pos));
         if (_tangential.lengthSq() < 1e-10) continue;
         _tangential.normalize();
-        _swirl.copy(p).cross(_tangential).multiplyScalar(g.spin * falloff);
+        _swirl.copy(_tangential).cross(p).multiplyScalar(g.spin * falloff);
         out.add(_swirl);
       }
     }
@@ -201,7 +201,7 @@ export class WindField {
       _tangential.copy(s.pos).addScaledVector(p, -p.dot(s.pos));
       if (_tangential.lengthSq() < 1e-10) continue;
       _tangential.normalize();
-      _swirl.copy(p).cross(_tangential).multiplyScalar(s.spin * mag);
+      _swirl.copy(_tangential).cross(p).multiplyScalar(s.spin * mag);
       out.add(_swirl);
       out.addScaledVector(_tangential, mag * 0.18); // gentle inward pull
     }

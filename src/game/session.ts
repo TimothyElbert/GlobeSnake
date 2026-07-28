@@ -1,7 +1,9 @@
 import { Vector3 } from 'three';
 import { DEG, EARTH_RADIUS_KM, angleBetween, bearingDeg, fromLatLon, tangentToward } from '@core/sphere';
 import { Snake, type SnakeConfig, type SteerInput } from '@core/snake';
-import { WorldData, Terrain, isWater } from '@core/world';
+import {
+  SEA_LEVEL_CODE, TERRAIN_NAME, TERRAIN_SPEED, Terrain, WorldData, elevationMetres, isWater,
+} from '@core/world';
 import { mulberry32, todaySeed } from '@core/loop';
 import { RouteGrid } from './par';
 import { ShipFleet } from './ships';
@@ -347,7 +349,7 @@ export class Session {
     this.traceAccum = 0;
     const p = this.snake.position;
     this.traceLat.push(Math.asin(Math.max(-1, Math.min(1, p.y))) * (180 / Math.PI));
-    this.traceLon.push(Math.atan2(p.z, p.x) * (180 / Math.PI));
+    this.traceLon.push(Math.atan2(-p.z, p.x) * (180 / Math.PI));
     this.traceClimate.push(this.snake.surface.climate);
   }
 
@@ -405,6 +407,43 @@ export class Session {
   /** Free, always on: the game's quiet geography teacher. */
   get locationName(): string {
     return this.world.countryNameAt(this.snake.position);
+  }
+
+  /**
+   * A breakdown of why the snake is going the speed it is.
+   *
+   * The terrain model was the least legible thing in the game: you would grind
+   * to a crawl in the Andes with nothing on screen saying why, and the whole
+   * point of terrain is that it is a decision you make on purpose. Elevation
+   * relief shows it geographically; this shows it numerically.
+   */
+  speedReadout(): { total: number; parts: { label: string; factor: number }[] } {
+    const parts: { label: string; factor: number }[] = [];
+    const t = this.snake.surface.terrain;
+    const base = TERRAIN_SPEED[t] ?? 1;
+    parts.push({ label: TERRAIN_NAME[t], factor: base });
+
+    const code = this.snake.surface.elevation;
+    if (code > SEA_LEVEL_CODE) {
+      const km = elevationMetres(code) / 1000;
+      const alt = 1 - Math.min(km * 0.028, 0.2);
+      if (alt < 0.995) parts.push({ label: `${Math.round(km * 1000)} m up`, factor: alt });
+    }
+    if (this.snake.wake.active) parts.push({ label: 'Drafting', factor: 1.3 });
+    if (this.shipBoost > 0) parts.push({ label: 'Ship surge', factor: 1.25 });
+    if (this.captureSlowdown > 0) parts.push({ label: 'Found it', factor: this.snake.speedScale });
+
+    const wind = this.snake.wind.length();
+    if (wind > 0.05) {
+      // Signed: a following wind helps, a headwind is a tax, and the player
+      // needs to know which one they are in without guessing.
+      const along = this.snake.wind.dot(this.snake.heading) / this.snake.cfg.baseSpeedDeg;
+      parts.push({ label: along >= 0 ? 'Tailwind' : 'Headwind', factor: 1 + along });
+    }
+
+    let total = 1;
+    for (const p of parts) total *= p.factor;
+    return { total, parts };
   }
 
   get distanceToTargetKm(): number {

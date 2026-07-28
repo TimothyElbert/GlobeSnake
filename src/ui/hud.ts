@@ -42,6 +42,9 @@ export class Hud {
   private readonly whereCountry: HTMLElement;
   private readonly whereTerrain: HTMLElement;
   private readonly whereSwatch: HTMLElement;
+  private readonly speedValue: HTMLElement;
+  private readonly speedParts: HTMLElement;
+  private lastSpeedText = '';
 
   private readonly boostFill: HTMLElement;
   private readonly wakeFill: HTMLElement;
@@ -90,10 +93,13 @@ export class Hud {
     this.whereCountry = el('div', { class: 'where-country', text: '—' });
     this.whereSwatch = el('span', { class: 'swatch' });
     this.whereTerrain = el('span', { text: '' });
+    this.speedValue = el('span', { class: 'speed-value', text: '×1.00' });
+    this.speedParts = el('span', { class: 'speed-parts', text: '' });
     const bl = el('div', { class: 'hud-bl panel where' }, [
       el('div', { class: 'stat-label', text: 'You are in' }),
       this.whereCountry,
       el('div', { class: 'where-terrain' }, [this.whereSwatch, this.whereTerrain]),
+      el('div', { class: 'speed-row' }, [this.speedValue, this.speedParts]),
     ]);
 
     this.boostFill = el('i');
@@ -235,6 +241,22 @@ export class Hud {
     const cc = hexToCss(climateColor(climate));
     this.whereSwatch.style.background = cc;
     this.whereSwatch.style.color = cc;
+
+    // Speed, and what is causing it. Colour-coded because the number alone is
+    // easy to miss mid-corner — green when the ground is helping, red when it
+    // is not.
+    const speed = session.speedReadout();
+    this.speedValue.textContent = `×${speed.total.toFixed(2)}`;
+    this.speedValue.style.color = speed.total > 1.04 ? 'var(--accent)'
+      : speed.total < 0.94 ? 'var(--danger)' : 'var(--ink)';
+    const partsText = speed.parts
+      .filter((p) => Math.abs(p.factor - 1) > 0.02)
+      .map((p) => `${p.label} ×${p.factor.toFixed(2)}`)
+      .join(' · ');
+    if (partsText !== this.lastSpeedText) {
+      this.lastSpeedText = partsText;
+      this.speedParts.textContent = partsText || 'no modifiers';
+    }
 
     const cfg = session.snake.cfg;
     this.boostFill.style.width = `${(session.snake.boostStamina / cfg.boostCapacity) * 100}%`;

@@ -168,6 +168,8 @@ export class Snake {
   private readonly nodes: Float32Array;
   /** Climate class at the moment each node was laid down — the body's memory. */
   private readonly nodeClimate: Uint8Array;
+  /** Ground height under each node, so the ribbon can lie on the terrain. */
+  private readonly nodeRelief: Uint8Array;
   private writeIndex = 0;
   private tailIndex = 0;
   private readonly hash: SphereHash;
@@ -191,6 +193,7 @@ export class Snake {
     this.cfg = { ...DEFAULT_SNAKE_CONFIG, ...cfg };
     this.nodes = new Float32Array(this.cfg.capacity * 3);
     this.nodeClimate = new Uint8Array(this.cfg.capacity);
+    this.nodeRelief = new Uint8Array(this.cfg.capacity);
     this.bodyLengthDeg = this.cfg.startBodyDeg;
     this.boostStamina = this.cfg.boostCapacity;
     // Cell a little larger than the collision diameter so a query never has to
@@ -240,6 +243,11 @@ export class Snake {
     return this.nodeClimate[i];
   }
 
+  /** Ground height under node `i`, 0..1 of the maximum relief. */
+  reliefAtNode(i: number): number {
+    return this.nodeRelief[i] / 255;
+  }
+
   grow(deg: number): void {
     this.bodyLengthDeg = Math.min(this.bodyLengthDeg + deg, this.cfg.maxBodyDeg);
   }
@@ -260,6 +268,7 @@ export class Snake {
     this.nodes[o + 1] = this.position.y;
     this.nodes[o + 2] = this.position.z;
     this.nodeClimate[this.writeIndex] = this.surface.climate;
+    this.nodeRelief[this.writeIndex] = Math.round(this.world.reliefAt(this.position) * 255);
     this.hash.insert(this.position.x, this.position.y, this.position.z, this.writeIndex);
     this.writeIndex++;
   }
@@ -268,6 +277,7 @@ export class Snake {
     const keep = this.writeIndex - this.tailIndex;
     this.nodes.copyWithin(0, this.tailIndex * 3, this.writeIndex * 3);
     this.nodeClimate.copyWithin(0, this.tailIndex, this.writeIndex);
+    this.nodeRelief.copyWithin(0, this.tailIndex, this.writeIndex);
     this.hash.clear();
     for (let i = 0; i < keep; i++) {
       const o = i * 3;

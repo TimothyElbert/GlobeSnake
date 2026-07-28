@@ -2,7 +2,7 @@ import {
   AdditiveBlending, BackSide, Color, Mesh, ShaderMaterial, Texture, Vector3, type WebGLRenderer,
 } from 'three';
 import { makeGlobeGeometry } from './globeGeometry';
-import type { WorldData } from '@core/world';
+import { RELIEF_SCALE, type WorldData } from '@core/world';
 
 /**
  * The Earth.
@@ -22,13 +22,49 @@ import type { WorldData } from '@core/world';
  */
 
 const VERT = /* glsl */ `
+  uniform sampler2D uRelief;
+  uniform vec2  uReliefTexel;
+  uniform float uReliefScale;
+  uniform float uReliefNormal;
+
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vWorldPos;
+  varying vec3 vSphereDir;
+  varying float vHeight;
+
+  float reliefAt(vec2 duv) { return texture2D(uRelief, duv).r; }
+
   void main() {
     vUv = uv;
-    vNormal = normalize(normalMatrix * normal);
-    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vec2 duv = vec2(uv.x, 1.0 - uv.y);
+    vec3 n = normalize(normal);
+    vSphereDir = n;
+
+    // Displace radially. Because the offset is purely radial, the *direction*
+    // of every vertex is unchanged — which is what lets every hint overlay,
+    // the graticule and the data lookup keep working untouched on a globe that
+    // now has mountains on it.
+    float h = reliefAt(duv);
+    vHeight = h;
+    vec3 displaced = position * (1.0 + h * uReliefScale);
+
+    // Shading normal from the height gradient. Without this the relief is a
+    // silhouette effect only — you would see mountains on the limb and a flat
+    // planet everywhere else.
+    vec3 north = vec3(0.0, 1.0, 0.0) - n * n.y;
+    north = length(north) > 1e-4 ? normalize(north) : vec3(1.0, 0.0, 0.0);
+    vec3 east = normalize(cross(north, n));
+    float hE = reliefAt(duv + vec2(uReliefTexel.x, 0.0)) - reliefAt(duv - vec2(uReliefTexel.x, 0.0));
+    // duv.y grows southward, so negate to get the northward gradient.
+    float hN = -(reliefAt(duv + vec2(0.0, uReliefTexel.y)) - reliefAt(duv - vec2(0.0, uReliefTexel.y)));
+    // Longitude texels shrink toward the poles; without this correction the
+    // Arctic gets a corduroy of false east-west ridges.
+    float cosLat = max(0.15, sqrt(max(0.0, 1.0 - n.y * n.y)));
+    vec3 bumped = normalize(n - (east * (hE / cosLat) + north * hN) * uReliefNormal);
+
+    vNormal = normalize(normalMatrix * bumped);
+    vec4 wp = modelMatrix * vec4(displaced, 1.0);
     vWorldPos = wp.xyz;
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
@@ -74,6 +110,8 @@ const FRAG = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vWorldPos;
+  varying vec3 vSphereDir;
+  varying float vHeight;
 
   // The data texture stores row 0 at the north pole and is uploaded flipY:false,
   // while image textures are flipY:true. One subtraction reconciles them.
@@ -85,7 +123,10 @@ const FRAG = /* glsl */ `
 
   void main() {
     vec3 n = normalize(vNormal);
-    vec3 sphereDir = normalize(vWorldPos);
+    // The undisplaced direction. Radial displacement leaves it untouched, so
+    // every angular overlay below works on relief exactly as it did on a
+    // smooth sphere.
+    vec3 sphereDir = normalize(vSphereDir);
     vec4 data = texture2D(uWorld, dataUv(vUv));
     float terrain = floor(data.b * 255.0 + 0.5);
     float country = floor(data.a * 255.0 + 0.5);
@@ -140,7 +181,7 @@ const FRAG = /* glsl */ `
     // --- graticule: a stable reference frame so the eye is never lost --------
     if (uGraticule > 0.001) {
       float lat = degrees(asin(clamp(sphereDir.y, -1.0, 1.0)));
-      float lon = degrees(atan(sphereDir.z, sphereDir.x));
+      float lon = degrees(atan(-sphereDir.z, sphereDir.x));
       float latLine = abs(fract(lat / 15.0 + 0.5) - 0.5);
       float lonLine = abs(fract(lon / 15.0 + 0.5) - 0.5);
       float w = fwidth(lat / 15.0) * 0.9;
@@ -204,7 +245,12 @@ const FRAG = /* glsl */ `
     // Note this runs *before* the hint overlays, so the wedge, band and ring
     // all still work on a hand-drawn globe without a second code path.
     if (uParchment > 0.5) {
-      float inked = clamp(texture2D(uInk, dataUv(vUv)).r * uInkAmount, 0.0, 1.0);
+      // Snap partial coverage to "drawn". The nib has a soft falloff, so a raw
+      // reveal leaves a permanent half-inked fringe that reads as a coffee
+      // stain rather than as the edge of a finished plate. A steep curve gives
+      // a broad drawn region with a crisp boundary — which is what an unfinished
+      // antique map actually looks like.
+      float inked = smoothstep(0.10, 0.46, texture2D(uInk, dataUv(vUv)).r * uInkAmount);
 
       // Laid paper: two crossed sine grains plus blotchy age. Flat cream reads
       // as a beige bug; grain reads as a material.
@@ -255,13 +301,27 @@ const FRAG = /* glsl */ `
       pc = mix(pc, ink, edge * (0.20 + 0.80 * inked));
       // Graticule in faded red ochre, as on an old plate.
       float lat2 = degrees(asin(clamp(sphereDir.y, -1.0, 1.0)));
-      float lon2 = degrees(atan(sphereDir.z, sphereDir.x));
+      float lon2 = degrees(atan(-sphereDir.z, sphereDir.x));
       float gl = max(
         1.0 - smoothstep(0.0, fwidth(lat2 / 15.0) * 0.9, abs(fract(lat2 / 15.0 + 0.5) - 0.5)),
         1.0 - smoothstep(0.0, fwidth(lon2 / 15.0) * 0.9, abs(fract(lon2 / 15.0 + 0.5) - 0.5)));
       pc = mix(pc, vec3(0.545, 0.298, 0.212), gl * 0.16);
 
       col = pc;
+    }
+
+    // Aerial perspective: high ground reads cooler and paler, and steep faces
+    // that turn away from the sun fall into shadow. Together these are what
+    // make a range look like a range from directly above, where the silhouette
+    // gives nothing away.
+    float shade = clamp(dot(n, uSunDir) * 0.5 + 0.5, 0.0, 1.0);
+    if (uParchment > 0.5) {
+      // On vellum this is engraved hillshading, not sunlight: gentle, and with
+      // no day/night term at all, because a hand-drawn map is not lit.
+      col *= mix(1.0, 0.72 + 0.52 * shade, 0.4);
+    } else {
+      col *= mix(1.0, 0.45 + 0.85 * shade, 0.75 * daylight + 0.25);
+      col = mix(col, col * vec3(0.94, 0.98, 1.12) + vec3(0.02, 0.03, 0.05), vHeight * 0.55);
     }
 
     // --- limb darkening + atmospheric scatter on the rim --------------------
@@ -271,7 +331,9 @@ const FRAG = /* glsl */ `
     // and became a blue wash over the entire planet. Blue Marble's ocean is
     // almost black, so that wash *was* the ocean colour, and no amount of
     // grading the plate could fix it. At pow 8 it goes back to being the limb.
-    float rim = 1.0 - max(dot(n, viewDir), 0.0);
+    // Keyed off the sphere direction, not the bumped normal — otherwise every
+    // mountain face picks up its own private sunset.
+    float rim = 1.0 - max(dot(sphereDir, viewDir), 0.0);
     col += uAtmosphere * pow(rim, 8.0) * (0.35 + 0.65 * daylight) * 0.45;
 
     gl_FragColor = vec4(col, 1.0);
@@ -325,6 +387,10 @@ export interface GlobeOptions {
   /** Single-channel reveal texture; red = how thoroughly this texel is drawn. */
   inkTexture?: Texture;
   atmosphereColor?: number;
+  /** Vertical exaggeration of terrain, in globe radii at maximum land height. */
+  relief?: number;
+  /** How hard the height gradient bends the shading normal. */
+  reliefNormal?: number;
 }
 
 export class Globe {
@@ -335,7 +401,10 @@ export class Globe {
   private readonly sunDir = new Vector3(1, 0.25, 0.4).normalize();
 
   constructor(world: WorldData, day: Texture, night: Texture, opts: GlobeOptions = {}) {
-    const [ls, lts] = opts.segments ?? [256, 128];
+    // Dense enough for the relief to be geometry rather than a suggestion: at
+    // 256×128 a quad spans 1.4° of latitude and whole ranges vanish between
+    // vertices.
+    const [ls, lts] = opts.segments ?? [512, 256];
     this.material = new ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -344,6 +413,10 @@ export class Globe {
         uNight: { value: night },
         uWorld: { value: world.texture },
         uWorldTexel: { value: [1 / world.width, 1 / world.height] },
+        uRelief: { value: world.reliefTexture },
+        uReliefTexel: { value: [1 / 1024, 1 / 512] },
+        uReliefScale: { value: opts.relief ?? RELIEF_SCALE },
+        uReliefNormal: { value: opts.reliefNormal ?? 9.0 },
         uSunDir: { value: this.sunDir },
         uTime: { value: 0 },
         // The night side stays legible rather than going dark. A real

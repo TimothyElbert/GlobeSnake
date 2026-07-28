@@ -35,9 +35,10 @@ export function makeGlobeGeometry(lonSegments = 256, latSegments = 128, radius =
     for (let c = 0; c < cols; c++) {
       const u = c / lonSegments;           // 0 at lon −180
       const lon = (-180 + u * 360) * DEG;
+      // Same handedness as fromLatLon — see the note at the top of sphere.ts.
       const x = cl * Math.cos(lon);
       const y = sl;
-      const z = cl * Math.sin(lon);
+      const z = -cl * Math.sin(lon);
       normals[p] = x; normals[p + 1] = y; normals[p + 2] = z;
       positions[p] = x * radius; positions[p + 1] = y * radius; positions[p + 2] = z * radius;
       p += 3;
@@ -55,11 +56,14 @@ export function makeGlobeGeometry(lonSegments = 256, latSegments = 128, radius =
       const d = a + cols;
       const e = d + 1;
       // Counter-clockwise seen from outside, so front faces are the outside.
-      // The first cut had these reversed, which meant a BackSide shell rendered
-      // the *near* hemisphere — and the atmosphere glow blanketed the entire
-      // planet instead of hugging the limb.
-      indices[i++] = a; indices[i++] = b; indices[i++] = d;
-      indices[i++] = b; indices[i++] = e; indices[i++] = d;
+      //
+      // This ordering is paired with the sign of z above: negating a single
+      // coordinate mirrors the surface and therefore reverses every triangle's
+      // winding. Get it wrong and a BackSide shell renders the *near*
+      // hemisphere, so the atmosphere glow blankets the whole planet instead of
+      // hugging the limb. If you ever touch the handedness, flip these too.
+      indices[i++] = a; indices[i++] = d; indices[i++] = b;
+      indices[i++] = b; indices[i++] = d; indices[i++] = e;
     }
   }
 

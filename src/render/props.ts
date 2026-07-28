@@ -68,7 +68,8 @@ export class SnakeHead {
    * would introduce when the snake crosses the Arctic.
    */
   update(position: Vector3, heading: Vector3, climate: number, lift: number, time: number): void {
-    _bin.copy(position).cross(heading).normalize();
+    // makeBasis(x, y, z) wants a right-handed triple, so z = x × y.
+    _bin.copy(heading).cross(position).normalize();
     const r = 1 + lift + 0.006;
     this.group.position.copy(position).multiplyScalar(r);
     this.group.matrixAutoUpdate = false;
@@ -262,7 +263,7 @@ export class Starfield {
 
 /** Keep an object planted on the sphere, tangent-aligned. */
 export function orientOnSphere(obj: Object3D, unit: Vector3, forward: Vector3, lift: number): void {
-  _bin.copy(unit).cross(forward).normalize();
+  _bin.copy(forward).cross(unit).normalize();
   obj.position.copy(unit).multiplyScalar(1 + lift);
   obj.matrixAutoUpdate = false;
   obj.matrix.makeBasis(forward, unit, _bin);

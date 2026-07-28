@@ -1,4 +1,7 @@
-import { Vector3, DataTexture, RGBAFormat, UnsignedByteType, NearestFilter, ClampToEdgeWrapping, RepeatWrapping } from 'three';
+import {
+  Vector3, DataTexture, RGBAFormat, RedFormat, UnsignedByteType, NearestFilter, LinearFilter,
+  ClampToEdgeWrapping, RepeatWrapping,
+} from 'three';
 import { clamp } from './sphere';
 
 /**
@@ -165,6 +168,24 @@ export function climateLabel(index: number): string {
   return CLIMATE_NAME[code] ?? code;
 }
 
+/**
+ * How far the tallest land rises above sea level, in globe radii.
+ *
+ * Wildly exaggerated — Everest is really 0.0014 radii, which is invisible — and
+ * that is the point. The terrain speed model is the game's main routing
+ * decision, and before the relief existed there was no way to *see* that you
+ * were about to grind to a crawl. Mountains you can watch the snake climb are
+ * the readout.
+ *
+ * Both the vertex shader and the snake read this same constant against the same
+ * smoothed height field, so the body always sits exactly on the drawn surface.
+ */
+export const RELIEF_SCALE = 0.045;
+
+/** Resolution of the smoothed height field shared by the GPU and the sim. */
+const RELIEF_W = 1024;
+const RELIEF_H = 512;
+
 export interface CountryRecord {
   idx: number;
   name: string;
@@ -192,6 +213,8 @@ export class WorldData {
   private readonly byIso3 = new Map<string, CountryRecord>();
   private readonly byIndex = new Map<number, CountryRecord>();
   private _texture: DataTexture | null = null;
+  private _reliefTexture: DataTexture | null = null;
+  private readonly relief: Uint8Array;
 
   private constructor(width: number, height: number, bytes: Uint8Array, countries: CountryRecord[]) {
     this.width = width;
@@ -207,6 +230,7 @@ export class WorldData {
       const held = this.byIso3.get(key);
       if (!held || c.areaRank < held.areaRank) this.byIso3.set(key, c);
     }
+    this.relief = this.buildRelief();
   }
 
   static async load(baseUrl: string): Promise<WorldData> {
@@ -246,7 +270,7 @@ export class WorldData {
   private offsetOf(p: Vector3): number {
     // Inlined lat/lon: this runs several times per tick per snake segment.
     const lat = Math.asin(p.y < -1 ? -1 : p.y > 1 ? 1 : p.y);
-    const lon = Math.atan2(p.z, p.x);
+    const lon = Math.atan2(-p.z, p.x); // see the handedness note in sphere.ts
     let col = ((lon / (Math.PI * 2) + 0.5) * this.width) | 0;
     let row = ((0.5 - lat / Math.PI) * this.height) | 0;
     // Longitude wraps; latitude clamps.
@@ -332,6 +356,94 @@ export class WorldData {
       s *= 1 - clamp(km * 0.028, 0, 0.2);
     }
     return s;
+  }
+
+  /**
+   * Smoothed land height, 0 at sea level and 1 at the highest land, sampled
+   * bilinearly. This is the *authoritative* relief: the globe's vertex shader
+   * displaces by the texture built from this same array, so anything that wants
+   * to sit on the ground — the body, the head, the camera — asks here and lands
+   * exactly on the drawn surface rather than near it.
+   */
+  reliefAt(p: Vector3): number {
+    const lat = Math.asin(p.y < -1 ? -1 : p.y > 1 ? 1 : p.y);
+    const lon = Math.atan2(-p.z, p.x);
+    const fx = (lon / (Math.PI * 2) + 0.5) * RELIEF_W - 0.5;
+    const fy = (0.5 - lat / Math.PI) * RELIEF_H - 0.5;
+
+    let x0 = Math.floor(fx);
+    const y0 = Math.max(0, Math.min(RELIEF_H - 1, Math.floor(fy)));
+    const tx = fx - x0;
+    const ty = fy - y0;
+    const y1 = Math.min(RELIEF_H - 1, y0 + 1);
+    x0 = ((x0 % RELIEF_W) + RELIEF_W) % RELIEF_W;
+    const x1 = (x0 + 1) % RELIEF_W;
+
+    const e = this.relief;
+    const a = e[y0 * RELIEF_W + x0];
+    const b = e[y0 * RELIEF_W + x1];
+    const c = e[y1 * RELIEF_W + x0];
+    const d = e[y1 * RELIEF_W + x1];
+    const top = a + (b - a) * tx;
+    const bot = c + (d - c) * tx;
+    return (top + (bot - top) * ty) / 255;
+  }
+
+  /** Height above the unit sphere, in globe radii, at `p`. */
+  surfaceRadiusAt(p: Vector3): number {
+    return 1 + this.reliefAt(p) * RELIEF_SCALE;
+  }
+
+  /**
+   * Box-downsample the elevation byte into a smooth height field.
+   *
+   * Smoothing is not a compromise here, it is the requirement: displacing
+   * vertices straight from the 4096-wide nearest-sampled grid produces a field
+   * of single-texel spikes, and the snake would be climbing needles.
+   */
+  private buildRelief(): Uint8Array {
+    const out = new Uint8Array(RELIEF_W * RELIEF_H);
+    const sx = this.width / RELIEF_W;
+    const sy = this.height / RELIEF_H;
+    const span = Math.max(1, Math.round(sx));
+    for (let y = 0; y < RELIEF_H; y++) {
+      const y0 = Math.min(this.height - 1, (y * sy) | 0);
+      for (let x = 0; x < RELIEF_W; x++) {
+        const x0 = (x * sx) | 0;
+        let sum = 0;
+        let n = 0;
+        for (let dy = 0; dy < span; dy++) {
+          const yy = Math.min(this.height - 1, y0 + dy);
+          for (let dx = 0; dx < span; dx++) {
+            const xx = (x0 + dx) % this.width;
+            const code = this.bytes[(yy * this.width + xx) * 4];
+            // Ocean contributes zero rather than a negative depth: the sea
+            // surface is flat, whatever the sea floor is doing underneath.
+            sum += code > SEA_LEVEL_CODE ? code - SEA_LEVEL_CODE : 0;
+            n++;
+          }
+        }
+        const avg = sum / n / (MAX_LAND_CODE - SEA_LEVEL_CODE);
+        out[y * RELIEF_W + x] = Math.min(255, Math.round(avg * 255));
+      }
+    }
+    return out;
+  }
+
+  /** Linear-filtered height field for vertex displacement. */
+  get reliefTexture(): DataTexture {
+    if (!this._reliefTexture) {
+      const tex = new DataTexture(this.relief, RELIEF_W, RELIEF_H, RedFormat, UnsignedByteType);
+      tex.magFilter = LinearFilter;
+      tex.minFilter = LinearFilter;
+      tex.wrapS = RepeatWrapping;
+      tex.wrapT = ClampToEdgeWrapping;
+      tex.flipY = false;
+      tex.generateMipmaps = false;
+      tex.needsUpdate = true;
+      this._reliefTexture = tex;
+    }
+    return this._reliefTexture;
   }
 
   /** Upload the raw grid to the GPU so shaders read exactly what physics reads. */

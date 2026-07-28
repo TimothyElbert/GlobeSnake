@@ -122,7 +122,7 @@ export class InkMap {
     if (this.needsClear) this.clear(renderer);
 
     const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) * (180 / Math.PI);
-    const lon = Math.atan2(p.z, p.x) * (180 / Math.PI);
+    const lon = Math.atan2(-p.z, p.x) * (180 / Math.PI);
     const u = lon / 360 + 0.5;
     const v = 0.5 - lat / 180;   // 0 at the north pole, matching world.bin
 

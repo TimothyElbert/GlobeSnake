@@ -118,7 +118,7 @@ export class Minimap {
     _up.copy(_n).addScaledVector(centre, -centre.y);
     if (_up.lengthSq() < 1e-8) _up.copy(heading);
     _up.normalize();
-    _right.copy(centre).cross(_up).normalize();
+    _right.copy(_up).cross(centre).normalize(); // east = north × up
 
     const project = (p: Vector3): [number, number] | null => {
       if (p.dot(centre) <= 0.02) return null;
@@ -206,7 +206,7 @@ export class Minimap {
     _up.copy(_n).addScaledVector(centre, -centre.y);
     if (_up.lengthSq() < 1e-8) _up.set(1, 0, 0).addScaledVector(centre, -centre.x);
     _up.normalize();
-    _right.copy(centre).cross(_up).normalize();
+    _right.copy(_up).cross(centre).normalize(); // east = north × up
 
     const cx = s / 2;
     const cy = s / 2;
@@ -225,7 +225,7 @@ export class Minimap {
         const z = _right.z * nx + _up.z * ny + centre.z * nz;
 
         const lat = Math.asin(Math.max(-1, Math.min(1, y)));
-        const lon = Math.atan2(z, x);
+        const lon = Math.atan2(-z, x);
         let col = ((lon / (Math.PI * 2) + 0.5) * SRC_W) | 0;
         let row = ((0.5 - lat / Math.PI) * SRC_H) | 0;
         col = ((col % SRC_W) + SRC_W) % SRC_W;

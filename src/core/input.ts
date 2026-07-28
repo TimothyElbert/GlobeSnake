@@ -3,7 +3,8 @@ import { clamp, signedTurnToward } from './sphere';
 import type { SteerInput } from './snake';
 
 export type InputScheme = 'keyboard' | 'pointer';
-export type GameAction = 'hint' | 'pause' | 'restart' | 'mute' | 'zoomIn' | 'zoomOut' | 'toggleMap';
+export type GameAction =
+  | 'hint' | 'pause' | 'restart' | 'mute' | 'zoomIn' | 'zoomOut' | 'toggleMap' | 'borders';
 
 /**
  * One input manager for all three control schemes.
@@ -94,6 +95,7 @@ export class InputManager {
       case 'KeyR': this.emit('restart'); break;
       case 'KeyM': this.emit('mute'); break;
       case 'KeyT': this.emit('toggleMap'); break;
+      case 'KeyB': this.emit('borders'); break;
       case 'PageUp': case 'Equal': this.emit('zoomIn'); break;
       case 'PageDown': case 'Minus': this.emit('zoomOut'); break;
     }

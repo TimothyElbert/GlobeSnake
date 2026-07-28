@@ -2,7 +2,7 @@ import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, ShaderMaterial, Vector3,
 } from 'three';
 import type { Snake } from '@core/snake';
-import { climateColor } from '@core/world';
+import { RELIEF_SCALE, climateColor } from '@core/world';
 
 /**
  * The snake's body, as a ribbon laid on the sphere.
@@ -111,6 +111,7 @@ const _tan = new Vector3();
 const _bin = new Vector3();
 const _col = new Color();
 const _colB = new Color();
+const _dryInk = new Color(0x5a3d22);
 
 export interface RibbonOptions {
   /** Half-width of the body, in globe radii. */
@@ -128,6 +129,21 @@ export interface RibbonOptions {
    * thing a game like this can do.
    */
   maxNodes?: number;
+  /**
+   * Terra Incognita only: how many nodes behind the head the body stops being
+   * a snake and becomes drawn map.
+   *
+   * With a permanent trail the honest question is "is the snake supposed to
+   * just extend forever?", and if the whole thing keeps rendering as a fat live
+   * body the honest answer looks like "yes, and that's a bug". Narrowing and
+   * darkening the older stretch into dried ink says what is actually true: the
+   * animal is the last few degrees, and everything behind it is the map you
+   * drew. It stays clearly visible, because it is still lethal.
+   */
+  dryAfterNodes?: number;
+  dryFadeNodes?: number;
+  dryWidth?: number;
+  dryColor?: number;
 }
 
 export class SnakeRibbon {
@@ -142,6 +158,9 @@ export class SnakeRibbon {
   private readonly width: number;
   private readonly lift: number;
   private readonly maxNodes: number;
+  private readonly dryAfter: number;
+  private readonly dryFade: number;
+  private readonly dryWidth: number;
   /** Window currently resident in the vertex buffer. */
   private builtFirst = -1;
   private builtLast = -1;
@@ -150,6 +169,10 @@ export class SnakeRibbon {
     this.width = opts.width ?? 0.0135;
     this.lift = opts.lift ?? 0.0035;
     this.maxNodes = opts.maxNodes ?? DEFAULT_MAX_NODES;
+    this.dryAfter = opts.dryAfterNodes ?? 0;
+    this.dryFade = Math.max(1, opts.dryFadeNodes ?? 90);
+    this.dryWidth = opts.dryWidth ?? 0.45;
+    _dryInk.setHex(opts.dryColor ?? 0x5a3d22);
     const MAX_RIBBON_NODES = this.maxNodes;
 
     const verts = MAX_RIBBON_NODES * 2;
@@ -215,9 +238,13 @@ export class SnakeRibbon {
     const cols = this.colors;
     const along = this.along;
     const sides = this.sides;
-    const r = 1 + this.lift;
 
     for (let i = from; i <= to; i++) {
+      // Ride the terrain. Each node remembers the ground height it was laid on,
+      // so the body climbs the Andes and drops into the Amazon exactly as the
+      // displaced globe does — which is the only way the speed penalty for
+      // mountains is legible before you are already crawling.
+      const r = 1 + snake.reliefAtNode(i) * RELIEF_SCALE + this.lift;
       const k = i - first;
       snake.nodeAt(i, _p);
       snake.nodeAt(i > first ? i - 1 : i, _prev);
@@ -238,13 +265,18 @@ export class SnakeRibbon {
       // snake was tail, and it rendered as a needle rather than an animal.
       const taperTail = Math.min(1, Math.pow(fromTail / this.taperNodes, 0.5));
       const taperHead = 1 - 0.28 * Math.pow(Math.max(0, 1 - fromHead / 22), 2);
-      const w = this.width * taperTail * taperHead;
+      // 0 while this stretch is still the animal, 1 once it has become map.
+      const dry = this.dryAfter > 0
+        ? Math.min(1, Math.max(0, (fromHead - this.dryAfter) / this.dryFade))
+        : 0;
+      const w = this.width * taperTail * taperHead * (1 - dry * (1 - this.dryWidth));
 
       // Blend each node's climate with its neighbour so biome changes read as
       // gradients rather than as painted stripes.
       _col.setHex(climateColor(snake.climateAtNode(i)));
       _colB.setHex(climateColor(snake.climateAtNode(i > first ? i - 1 : i)));
       _col.lerp(_colB, 0.5);
+      if (dry > 0) _col.lerp(_dryInk, dry * 0.88);
 
       const v0 = k * 2, v1 = v0 + 1;
       const o0 = v0 * 3, o1 = v1 * 3;
@@ -285,8 +317,12 @@ export class SnakeRibbon {
     // out around 2,700 nodes). A permanent trail keeps `first` pinned at zero,
     // and then only the newly-laid nodes and the moving head taper need
     // rewriting — which is what makes a 40,000-node body affordable at all.
+    // The rewrite window has to cover the drying transition as well as the new
+    // nodes, because "how far behind the head am I" changes for every node in
+    // that band each frame.
     const canReuse = this.builtFirst === first && this.builtLast >= first && this.builtLast <= last;
-    const from = canReuse ? Math.max(first, this.builtLast - 30) : first;
+    const window = 30 + (this.dryAfter > 0 ? this.dryAfter + this.dryFade : 0);
+    const from = canReuse ? Math.max(first, this.builtLast - window) : first;
     this.writeRange(snake, first, last, from, last);
 
     const dirtyStart = (from - first) * 2;

@@ -1,5 +1,6 @@
 import {
-  BoxGeometry, BufferGeometry, Color, InstancedMesh, Matrix4, MeshBasicMaterial, Object3D, Vector3,
+  BoxGeometry, BufferAttribute, BufferGeometry, Color, InstancedMesh, Matrix4, MeshBasicMaterial,
+  Object3D, Vector3,
 } from 'three';
 import { DEG, anyTangent, step, turn } from '@core/sphere';
 import { Terrain, WorldData, isWater } from '@core/world';
@@ -44,18 +45,31 @@ export class ShipFleet {
   private readonly colour = new Color();
 
   constructor(private readonly world: WorldData, count = 14) {
-    // A blunt little hull: at the scale ships appear on screen, silhouette is
-    // all that survives, and a distinct silhouette is exactly what keeps them
-    // from being mistaken for a target pin.
-    const hull: BufferGeometry = new BoxGeometry(0.010, 0.0022, 0.0038);
-    hull.translate(0, 0.0011, 0);
+    // Sized for the chase camera, not for scale. At a realistic size a ship is
+    // a sub-pixel speck — they were showing on the minimap and were completely
+    // invisible on the globe itself, which made the bonus feel like a rumour.
+    // These are roughly 200 km long, and the wake is what actually catches the
+    // eye at distance.
+    const hull: BufferGeometry = new BoxGeometry(0.015, 0.0042, 0.0058);
+    hull.translate(0, 0.0021, 0);
+    // A white per-vertex colour is not decoration, it is required. With
+    // `vertexColors: true` three compiles `vColor *= color`, and a geometry
+    // with no `color` attribute supplies the WebGL default of (0,0,0) — so
+    // every instance multiplied to pure black and the entire fleet was
+    // invisible against a dark ocean while still showing on the minimap.
+    hull.setAttribute('color', new BufferAttribute(
+      new Float32Array(hull.getAttribute('position').count * 3).fill(1), 3,
+    ));
     this.hulls = new InstancedMesh(hull, new MeshBasicMaterial({ vertexColors: true }), count);
     this.hulls.frustumCulled = false;
     this.hulls.renderOrder = 3;
 
-    const wake = new BoxGeometry(0.030, 0.0004, 0.0060);
-    wake.translate(-0.020, 0, 0);
-    const wakeMat = new MeshBasicMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.34 });
+    // The wake is what actually catches the eye at distance, so it is long
+    // relative to the hull — but faint, or a fleet of them reads as debris
+    // scattered across the ocean.
+    const wake = new BoxGeometry(0.052, 0.0005, 0.0085);
+    wake.translate(-0.032, 0, 0);
+    const wakeMat = new MeshBasicMaterial({ color: 0xeaf8ff, transparent: true, opacity: 0.26 });
     this.wakes = new InstancedMesh(wake, wakeMat, count);
     this.wakes.frustumCulled = false;
     this.wakes.renderOrder = 2;
@@ -133,17 +147,21 @@ export class ShipFleet {
     let n = 0;
     for (const ship of this.ships) {
       if (!ship.alive) continue;
-      _bin.copy(ship.pos).cross(ship.dir).normalize();
+      _bin.copy(ship.dir).cross(ship.pos).normalize();
       _mat.makeBasis(ship.dir, ship.pos, _bin);
-      _mat.setPosition(
-        ship.pos.x * 1.0018,
-        ship.pos.y * 1.0018,
-        ship.pos.z * 1.0018,
-      );
+      // Ships only ever sit on water, where the relief is flat, so a constant
+      // lift is enough — it just has to clear the snake's own ribbon height.
+      _mat.setPosition(ship.pos.x * 1.005, ship.pos.y * 1.005, ship.pos.z * 1.005);
       this.hulls.setMatrixAt(n, _mat);
       this.wakes.setMatrixAt(n, _mat);
-      // Cargo reds and naval greys, biased toward the former.
-      this.colour.setHSL(ship.hue < 0.7 ? 0.02 + ship.hue * 0.12 : 0.58, ship.hue < 0.7 ? 0.62 : 0.10, 0.55);
+      // Cargo reds and naval greys, biased toward the former, and bright: these
+      // are unlit basic materials sitting on a dark ocean, and a realistic
+      // shipping-grey reads as nothing at all.
+      this.colour.setHSL(
+        ship.hue < 0.7 ? 0.04 + ship.hue * 0.10 : 0.55,
+        ship.hue < 0.7 ? 0.85 : 0.22,
+        0.68,
+      );
       this.hulls.setColorAt(n, this.colour);
       n++;
     }

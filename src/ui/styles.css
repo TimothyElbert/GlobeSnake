@@ -268,6 +268,30 @@ canvas { display: block; touch-action: none; }
   box-shadow: 0 0 8px currentColor;
 }
 
+/* Speed and its causes. The terrain model is the game's main routing decision
+   and was previously invisible — you found out you were in mountains by
+   feeling slow. */
+.speed-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(140, 178, 220, 0.14);
+}
+.speed-value {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: color 200ms;
+}
+.speed-parts {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  line-height: 1.3;
+}
+
 /* --- minimap -------------------------------------------------------------- */
 
 .minimap {
