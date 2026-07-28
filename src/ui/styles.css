@@ -346,7 +346,10 @@ canvas { display: block; touch-action: none; }
   inset: 0;
   z-index: 40;
   display: flex;
-  align-items: center;
+  /* Start at the top, not centred: a sheet taller than the viewport that is
+     vertically centred opens already scrolled, with its own title cut in half
+     by the top edge. */
+  align-items: flex-start;
   justify-content: center;
   padding: 24px;
   background: radial-gradient(ellipse at 50% 40%, rgba(9, 18, 32, 0.72), rgba(2, 4, 8, 0.94));
@@ -358,6 +361,7 @@ canvas { display: block; touch-action: none; }
 
 .sheet {
   width: min(680px, 100%);
+  margin: auto 0;
   padding: 30px 34px 26px;
   animation: sheet-in 420ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -612,15 +616,54 @@ canvas { display: block; touch-action: none; }
   .hud-br { bottom: 96px; }
 }
 
+/* --- phones -------------------------------------------------------------- */
+/* The bottom edge is the crowded one: meters, the location readout and the
+   minimap all want it. On a narrow screen they are stacked instead of laid out
+   in a row, because the location readout is the game's free teaching aid and
+   must never be the thing that gets squeezed out. */
 @media (max-width: 720px) {
-  .stat-value { font-size: 22px; }
-  .prompt { top: 10px; padding: 10px 16px 12px; min-width: 0; max-width: 92vw; }
+  .stat-value { font-size: 20px; }
+  .stat-sub { font-size: 10px; }
+  /* Below the corner cards rather than between them. There simply is not
+     enough width on a phone for score | prompt | clock in one row, and the
+     prompt is the thing that must never be clipped — it is the puzzle. */
+  .prompt { top: 82px; padding: 10px 16px 12px; min-width: 0; max-width: calc(100vw - 24px); }
   .prompt-name { font-size: clamp(20px, 6vw, 28px); }
-  .hud-tl, .hud-tr, .hud-bl, .hud-br, .hud-bc { padding: 9px 12px; }
-  .hud-bl { max-width: 46vw; }
-  .meter { width: 84px; }
+  .prompt-image { height: clamp(38px, 7vh, 58px); }
+  .hud-tl, .hud-tr, .hud-bl, .hud-br, .hud-bc { padding: 8px 11px; }
+
+  .hud-br { bottom: 12px; right: 12px; padding: 6px; }
+  .hud-br canvas { width: 92px !important; height: 92px !important; }
+
+  .hud-bl {
+    bottom: 12px;
+    left: 12px;
+    right: 118px;
+    max-width: none;
+    min-width: 0;
+  }
+  .where-country { font-size: 16px; }
+  .where-terrain { font-size: 10px; }
+
+  /* Meters move above the location card rather than across it. */
+  .hud-bc {
+    left: 12px;
+    right: 118px;
+    bottom: 92px;
+    transform: none;
+  }
+  .meters { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+  .meter { width: 64px; }
+  .hint-chip { font-size: 10px; padding: 3px 8px; }
+
   .sheet { padding: 22px 20px 20px; }
   .toast-blurb { max-width: 76vw; }
+  .toast-rail { top: 40%; }
+}
+
+/* Very short landscape phones: drop the meters rather than stack forever. */
+@media (max-height: 460px) and (max-width: 900px) {
+  .hud-bc { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

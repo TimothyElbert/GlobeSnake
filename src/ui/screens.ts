@@ -184,7 +184,7 @@ export class StartScreen {
     this.onPlay({ mode: this.mode, deck: this.deck });
   }
 
-  show(): void { this.root.hidden = false; this.refreshBest(); }
+  show(): void { this.root.hidden = false; this.refreshBest(); this.root.scrollTop = 0; }
   hide(): void { this.root.hidden = true; }
   mount(parent: HTMLElement = document.body): void { parent.append(this.root); }
 }

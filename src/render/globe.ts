@@ -196,8 +196,8 @@ const FRAG = /* glsl */ `
       float fill = 1.0 - smoothstep(uRingRadius - 0.02, uRingRadius, a);
       float edge = 1.0 - smoothstep(0.0, 0.018, abs(a - uRingRadius));
       float pulse = 0.7 + 0.3 * sin(uTime * 2.6);
-      col = mix(col, vec3(1.0, 0.86, 0.45), fill * 0.30);
-      col += vec3(1.0, 0.82, 0.35) * (fill * 0.18 + edge * 1.6 * pulse) * uRingStrength;
+      col = mix(col, vec3(1.0, 0.86, 0.45), fill * 0.20);
+      col += vec3(1.0, 0.82, 0.35) * (fill * 0.08 + edge * 0.85 * pulse) * uRingStrength;
     }
 
     // --- Terra Incognita: vellum, and ink where you have been ---------------
@@ -385,15 +385,16 @@ export class Globe {
       uniforms: {
         uColor: { value: new Color(opts.atmosphereColor ?? 0x5aa9ff) },
         uSunDir: { value: this.sunDir },
-        uIntensity: { value: opts.atmosphere ?? 2.4 },
+        uIntensity: { value: opts.atmosphere ?? 1.9 },
       },
       side: BackSide,
       blending: AdditiveBlending,
       transparent: true,
       depthWrite: false,
     });
-    // Wide enough that the halo has room to be a gradient rather than a line.
-    this.atmosphere = new Mesh(makeGlobeGeometry(96, 48, 1.10), this.atmoMaterial);
+    // Wide enough that the halo is a gradient rather than a line, tight enough
+    // that it stays a halo. At 1.10 it was a band thicker than Africa.
+    this.atmosphere = new Mesh(makeGlobeGeometry(96, 48, 1.045), this.atmoMaterial);
     this.atmosphere.frustumCulled = false;
     this.atmosphere.renderOrder = 2;
   }
@@ -469,7 +470,7 @@ export class Globe {
 
   setQuality(renderer: WebGLRenderer, low: boolean): void {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 1.5));
-    this.atmoMaterial.uniforms.uIntensity.value = low ? 1.5 : 2.4;
+    this.atmoMaterial.uniforms.uIntensity.value = low ? 1.2 : 1.9;
   }
 
   dispose(): void {

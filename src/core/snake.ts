@@ -50,19 +50,23 @@ export const DEFAULT_SNAKE_CONFIG: SnakeConfig = {
   // where Montevideo is. Danger from the body is spatial, not temporal, so
   // halving the speed keeps every bit of the threat and buys back the thinking.
   baseSpeedDeg: 3.6,
-  // Turn radius = speed / turnRate ≈ 1.5°, a bit over three body-widths. At the
-  // original 220°/s the snake could turn a complete circle inside its own
-  // width, which is both unkillable and looks broken.
-  turnRateDeg: 135,
+  // Turn radius = speed / turnRate ≈ 2.0°, so a full circle is ~12.3° of arc.
+  // The number that actually matters is that circumference measured against the
+  // body: at 135°/s the circle was 9.4° around while the body was 14° long, so
+  // simply *holding a turn* was fatal from the first second — playtesting hit
+  // "you caught yourself" at 0:05 without ever meeting an obstacle. Now a
+  // starting body fits comfortably inside its own turning circle, and the first
+  // capture is what makes circling lethal. That progression is the game.
+  turnRateDeg: 105,
   // ~138 km across. Wide enough to read as a body from the chase camera —
   // at 0.42 it was a thread on screen — and still far inside the 1.5° turn
   // radius, so the snake never clips itself simply by cornering.
   collisionRadiusDeg: 0.62,
   neckGapDeg: 2.6,
   nodeSpacingDeg: 0.12,
-  // Long enough to read as an animal from the chase camera. At 7° the snake
-  // was barely six body-widths and looked like a lozenge, not a snake.
-  startBodyDeg: 14,
+  // Long enough to read as an animal from the chase camera, short enough to fit
+  // inside its own turning circle (see turnRateDeg). At 7° it was a lozenge.
+  startBodyDeg: 9,
   growthPerCaptureDeg: 10,
   maxBodyDeg: 320,
   boostMultiplier: 1.35,
