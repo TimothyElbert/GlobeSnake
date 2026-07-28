@@ -238,6 +238,54 @@ Build order: Expedition to done → Tempest → Terra Incognita.
 
 ---
 
+---
+
+## Revisions made during the build
+
+Recorded because each of these overturned something asserted above, and the reasoning
+matters more than the conclusion.
+
+**1. The trail is not permanent in Expedition or Tempest.** §0 committed to "the trail never
+despawns within a run — it is a wall, not a tail." Building it exposed that this is a different
+game: a permanent line makes every run end in inevitable self-encirclement, and it quietly
+discards the rule the brief actually asked for ("collect dots, grow longer, can't collide with
+yourself"). The insight underneath it was still right, so it was kept in the form that does not
+change the genre: **the world is small and the body grows fast**. Ten degrees of arc per capture
+means the body spans a third of the planet by capture ten, which is a real hazard without
+abandoning classic Snake. The permanent trail survives where it genuinely belongs — Terra
+Incognita, where an indelible line *is* the fiction, and where it earns that variant its
+distinct rule set.
+
+**2. Speed halved, from a ~50 s equatorial lap to ~100 s.** The council's small-world argument
+was framed as making the body dangerous, and at 50 s it did — but a typical hop is 80° of arc,
+which at that speed is eleven seconds. That is not enough time to remember where Montevideo is,
+and remembering is the game. The threat from the body is *spatial*, not temporal, so halving the
+speed cost none of it and bought back all the thinking.
+
+**3. Turn rate cut from 220°/s to 135°/s.** Measured after the fact: at 220°/s the turning circle
+was 0.03° across against a body 0.84° wide, so the snake could turn a complete loop inside its own
+width. That is unkillable and looks broken. At 135°/s the circle is 2.7° — a little over three
+body-widths, which is where Snake has always felt right.
+
+**4. The speed-scoring exponent raised from 0.55 to 0.8.** A perfect-knowledge bot was run
+through six captures and only ever earned ×1.08–×1.15, meaning the entire top half of the
+multiplier range was unreachable and mastery paid nothing. At 0.8 flawless play is worth ×1.4.
+
+**5. The Daily Run is planned up front.** Adaptive difficulty and the trail-obstruction bias in
+target selection are both good, and both would have made two players' daily runs diverge — which
+would make "everyone on Earth got these ten, in this order" a lie on the share card. The daily
+plan is now drawn from the date seed alone on a fixed 1-1-2-2-3-3-4-4-5-5 tier ladder, with no
+reference to the player.
+
+**6. Mountain coverage was re-baked.** The first bake classified mountain at 1.5% of land, because
+slope thresholds calibrated for real cartography wash out at 10 km per texel. At that density there
+was nothing to route around and §3's central promise was decorative. Retuned to 9.8% of land, with
+range-spine assertions (Andes, Himalaya, Alps, Rockies, Caucasus, Zagros, Atlas, Ethiopian
+Highlands, Southern Alps, Japanese Alps) and negative cases (Amazon, Sahara, Great Plains, Congo,
+East European Plain, central Tibet) now enforced by the bake's own verifier.
+
+---
+
 ## Attribution shipped in-game
 
 NASA Visible Earth / Blue Marble & GEBCO_08 (public domain) · Natural Earth (public domain) ·

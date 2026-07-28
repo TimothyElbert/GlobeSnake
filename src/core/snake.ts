@@ -54,10 +54,15 @@ export const DEFAULT_SNAKE_CONFIG: SnakeConfig = {
   // original 220°/s the snake could turn a complete circle inside its own
   // width, which is both unkillable and looks broken.
   turnRateDeg: 135,
-  collisionRadiusDeg: 0.42,
+  // ~138 km across. Wide enough to read as a body from the chase camera —
+  // at 0.42 it was a thread on screen — and still far inside the 1.5° turn
+  // radius, so the snake never clips itself simply by cornering.
+  collisionRadiusDeg: 0.62,
   neckGapDeg: 2.6,
   nodeSpacingDeg: 0.12,
-  startBodyDeg: 7,
+  // Long enough to read as an animal from the chase camera. At 7° the snake
+  // was barely six body-widths and looked like a lozenge, not a snake.
+  startBodyDeg: 14,
   growthPerCaptureDeg: 10,
   maxBodyDeg: 320,
   boostMultiplier: 1.35,

@@ -95,25 +95,35 @@ const FRAG = /* glsl */ `
     vec3 day = texture2D(uDay, vUv).rgb;
     vec3 night = texture2D(uNight, vUv).rgb;
 
-    // Gentle saturation and contrast lift: NASA's Blue Marble is scientifically
-    // honest and slightly drab as a game backdrop.
+    // Grade the plate for gameplay, not for fidelity. Blue Marble's ocean is a
+    // strong saturated blue that, once properly lit, swallows the continents —
+    // and the continents are where every target lives. So water is pushed down
+    // and desaturated while land is lifted: the map has to be *readable* first
+    // and photographic second.
     float lum = dot(day, vec3(0.299, 0.587, 0.114));
-    day = mix(vec3(lum), day, uSaturation);
-    day = pow(day, vec3(0.92)) * 1.06;
+    day = mix(vec3(lum), day, mix(uSaturation, 0.80, isWater));
+    day = pow(day, vec3(0.94));
+    day *= mix(1.06, 0.95, isWater);
+    // The bathymetry plate is nearly black over deep water, which renders as a
+    // hole in the planet. A deep-ocean floor colour sits underneath it so the
+    // sea reads as sea, with the real depth variation still riding on top.
+    day += vec3(0.012, 0.052, 0.125) * isWater;
 
     float sun = dot(n, uSunDir);
     // Widen the terminator to about 12 degrees so dusk is a band, not an edge.
     float daylight = smoothstep(-0.21, 0.21, sun);
 
     vec3 col = day * mix(uNightLift, 1.0, daylight);
-    col += night * (1.0 - daylight) * 1.5 * (1.0 - isWater);
-    col *= mix(vec3(0.72, 0.80, 1.0), vec3(1.0), daylight); // cool the dark side
+    col += night * (1.0 - daylight) * 1.35 * (1.0 - isWater);
+    col *= mix(vec3(0.82, 0.88, 1.0), vec3(1.0), daylight); // cool the dark side
 
-    // Specular glint off water, only where the sun actually is.
+    // Specular glint off water. Kept deliberately tiny and very tight: the sun
+    // is often near the camera, and a broad lobe turns the whole ocean into one
+    // flat sheet of cyan that erases every coastline on screen.
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     vec3 halfV = normalize(viewDir + uSunDir);
-    float spec = pow(max(dot(n, halfV), 0.0), 60.0) * isWater * daylight;
-    col += vec3(0.55, 0.70, 0.85) * spec * 0.8;
+    float spec = pow(max(dot(n, halfV), 0.0), 220.0) * isWater * daylight;
+    col += vec3(0.55, 0.70, 0.85) * spec * 0.16;
 
     // --- country borders, sampled from the same grid the game logic reads ----
     if (uBorders > 0.001) {
@@ -149,14 +159,24 @@ const FRAG = /* glsl */ `
     }
 
     // --- hint 1: bearing wedge cast from the player's position --------------
+    // A purely additive overlay disappears against bright terrain — the first
+    // build was invisible over the Sahara and over ocean glare alike. So the
+    // wedge *dims everything outside it* as well as lifting what is inside:
+    // contrast survives any background, which a glow does not.
     if (uWedgeStrength > 0.001) {
       vec3 toFrag = sphereDir - uWedgeOrigin * dot(uWedgeOrigin, sphereDir);
       float len = length(toFrag);
       if (len > 1e-5) {
         float align = dot(toFrag / len, uWedgeDir);
-        float inside = smoothstep(uWedgeCos - 0.04, uWedgeCos + 0.04, align);
-        float far = smoothstep(0.02, 0.25, angleTo(sphereDir, uWedgeOrigin));
-        col += vec3(0.35, 0.85, 1.0) * inside * far * 0.16 * uWedgeStrength;
+        float inside = smoothstep(uWedgeCos - 0.05, uWedgeCos + 0.05, align);
+        float far = smoothstep(0.015, 0.20, angleTo(sphereDir, uWedgeOrigin));
+        float pulse = 0.82 + 0.18 * sin(uTime * 2.2);
+        col *= mix(1.0, 0.55, (1.0 - inside) * far * uWedgeStrength);
+        col += vec3(0.30, 0.80, 1.0) * inside * far * 0.30 * pulse * uWedgeStrength;
+        // A bright leading edge on each side of the wedge so the *bearing*
+        // reads, not just a vague brighter region.
+        float rim = 1.0 - smoothstep(0.0, 0.02, abs(align - uWedgeCos));
+        col += vec3(0.55, 0.95, 1.0) * rim * far * 0.85 * uWedgeStrength;
       }
     }
 
@@ -165,18 +185,19 @@ const FRAG = /* glsl */ `
       float a = angleTo(sphereDir, uBandCenter);
       float band = smoothstep(uBandMin - 0.012, uBandMin + 0.012, a)
                  * (1.0 - smoothstep(uBandMax - 0.012, uBandMax + 0.012, a));
-      float edge = (1.0 - smoothstep(0.0, 0.010, abs(a - uBandMin)))
-                 + (1.0 - smoothstep(0.0, 0.010, abs(a - uBandMax)));
-      col += vec3(0.35, 0.85, 1.0) * (band * 0.10 + edge * 0.45) * uBandStrength;
+      float edge = (1.0 - smoothstep(0.0, 0.016, abs(a - uBandMin)))
+                 + (1.0 - smoothstep(0.0, 0.016, abs(a - uBandMax)));
+      col += vec3(0.35, 0.85, 1.0) * (band * 0.14 + edge * 1.1) * uBandStrength;
     }
 
     // --- hint 2: search circle around the target ----------------------------
     if (uRingStrength > 0.001) {
       float a = angleTo(sphereDir, uRingCenter);
       float fill = 1.0 - smoothstep(uRingRadius - 0.02, uRingRadius, a);
-      float edge = 1.0 - smoothstep(0.0, 0.012, abs(a - uRingRadius));
+      float edge = 1.0 - smoothstep(0.0, 0.018, abs(a - uRingRadius));
       float pulse = 0.7 + 0.3 * sin(uTime * 2.6);
-      col += vec3(1.0, 0.82, 0.35) * (fill * 0.13 + edge * 0.9 * pulse) * uRingStrength;
+      col = mix(col, vec3(1.0, 0.86, 0.45), fill * 0.30);
+      col += vec3(1.0, 0.82, 0.35) * (fill * 0.18 + edge * 1.6 * pulse) * uRingStrength;
     }
 
     // --- Terra Incognita: vellum, and ink where you have been ---------------
@@ -209,23 +230,29 @@ const FRAG = /* glsl */ `
       edge = clamp(edge, 0.0, 1.0);
 
       // Inked land: sepia washes keyed to climate, hachured where it is steep.
+      // These have to sit *well* away from the paper colour. The first pass
+      // used period-accurate pale washes and the result was invisible: a fully
+      // drawn map looked identical to a blank one, which threw away the entire
+      // mechanic. An antique plate is low-contrast in the hand and needs real
+      // separation on a screen.
       float elev = max(0.0, floor(data.r * 255.0 + 0.5) - 100.0) / 155.0;
-      vec3 wash = mix(vec3(0.815, 0.760, 0.610), vec3(0.596, 0.541, 0.376), elev * 1.6);
-      wash = mix(wash, vec3(0.463, 0.478, 0.396), step(3.5, terrain) * step(terrain, 4.5) * 0.55);
-      wash = mix(wash, vec3(0.847, 0.784, 0.573), step(4.5, terrain) * step(terrain, 5.5) * 0.75);
-      vec3 sea = vec3(0.741, 0.769, 0.741);
+      vec3 wash = mix(vec3(0.706, 0.596, 0.400), vec3(0.470, 0.376, 0.231), elev * 1.7);
+      wash = mix(wash, vec3(0.404, 0.443, 0.318), step(3.5, terrain) * step(terrain, 4.5) * 0.75);
+      wash = mix(wash, vec3(0.796, 0.694, 0.427), step(4.5, terrain) * step(terrain, 5.5) * 0.85);
+      wash = mix(wash, vec3(0.804, 0.816, 0.831), step(6.5, terrain) * step(terrain, 7.5) * 0.8);
+      vec3 sea = vec3(0.545, 0.596, 0.596);
       // Ruled sea lines, the way an engraver would fill open water.
-      sea *= 1.0 - smoothstep(0.4, 0.5, abs(fract(vUv.y * 620.0) - 0.5)) * 0.045;
+      sea *= 1.0 - smoothstep(0.35, 0.5, abs(fract(vUv.y * 700.0) - 0.5)) * 0.13;
       vec3 drawn = mix(sea, wash, 1.0 - w0);
 
       // Hachures on mountains: short strokes running with the slope.
       float hach = step(5.5, terrain) * step(terrain, 6.5);
-      drawn *= 1.0 - hach * smoothstep(0.35, 0.5, abs(fract((vUv.x + vUv.y) * 900.0) - 0.5)) * 0.30;
+      drawn *= 1.0 - hach * smoothstep(0.3, 0.5, abs(fract((vUv.x + vUv.y) * 900.0) - 0.5)) * 0.45;
 
-      vec3 ink = vec3(0.239, 0.169, 0.106);
-      vec3 pc = mix(paper, mix(paper, drawn, 0.88), inked);
+      vec3 ink = vec3(0.192, 0.129, 0.075);
+      vec3 pc = mix(paper, drawn, inked);
       // Coast is a whisper until you have been there, then a drawn line.
-      pc = mix(pc, ink, edge * (0.16 + 0.72 * inked));
+      pc = mix(pc, ink, edge * (0.20 + 0.80 * inked));
       // Graticule in faded red ochre, as on an old plate.
       float lat2 = degrees(asin(clamp(sphereDir.y, -1.0, 1.0)));
       float lon2 = degrees(atan(sphereDir.z, sphereDir.x));
@@ -238,8 +265,14 @@ const FRAG = /* glsl */ `
     }
 
     // --- limb darkening + atmospheric scatter on the rim --------------------
+    // The exponent here matters far more than it looks. The chase camera sits
+    // low, so nearly the whole visible surface is at a grazing angle and rim is
+    // large almost everywhere — at pow 3.6 this term stopped being a limb glow
+    // and became a blue wash over the entire planet. Blue Marble's ocean is
+    // almost black, so that wash *was* the ocean colour, and no amount of
+    // grading the plate could fix it. At pow 8 it goes back to being the limb.
     float rim = 1.0 - max(dot(n, viewDir), 0.0);
-    col += uAtmosphere * pow(rim, 3.2) * (0.35 + 0.65 * daylight) * 0.9;
+    col += uAtmosphere * pow(rim, 8.0) * (0.35 + 0.65 * daylight) * 0.45;
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -266,10 +299,18 @@ const ATMO_FRAG = /* glsl */ `
   void main() {
     vec3 n = normalize(vNormal);
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
-    // Back-side shell: the normal points inward, so flip the fresnel.
-    float rim = pow(clamp(1.0 + dot(n, viewDir), 0.0, 1.0), 2.6);
-    float lit = smoothstep(-0.5, 0.35, dot(normalize(vWorldPos), uSunDir));
-    gl_FragColor = vec4(uColor, 1.0) * rim * uIntensity * (0.18 + 0.82 * lit);
+
+    // Only the far half of this shell is drawn, and only where it escapes the
+    // planet's silhouette — so the visible annulus runs from "just outside the
+    // horizon" (where the outward normal points well away from the camera) to
+    // the shell's own edge (where it is exactly side-on). Keying off -dot puts
+    // the glow brightest against the planet and fading into space, which is the
+    // way round an atmosphere actually looks. Using 1+dot, as this did at
+    // first, produced a hard-edged blue ring floating off the limb.
+    float t = clamp(-dot(n, viewDir), 0.0, 1.0);
+    float rim = pow(t, 1.1) * (1.0 - smoothstep(0.72, 1.0, t));
+    float lit = smoothstep(-0.45, 0.40, dot(normalize(vWorldPos), uSunDir));
+    gl_FragColor = vec4(uColor, 1.0) * rim * uIntensity * (0.16 + 0.84 * lit);
   }
 `;
 
@@ -305,7 +346,11 @@ export class Globe {
         uWorldTexel: { value: [1 / world.width, 1 / world.height] },
         uSunDir: { value: this.sunDir },
         uTime: { value: 0 },
-        uNightLift: { value: opts.nightLift ?? 0.26 },
+        // The night side stays legible rather than going dark. A real
+        // terminator is the best thing on screen, but a game whose only verb is
+        // "recognise this place" cannot ask you to do it in the dark for three
+        // minutes at a stretch. Dim, cool and completely readable.
+        uNightLift: { value: opts.nightLift ?? 0.6 },
         uBorders: { value: 0 },
         uGraticule: { value: opts.graticule ?? 1 },
         uSaturation: { value: opts.saturation ?? 1.18 },
@@ -340,14 +385,15 @@ export class Globe {
       uniforms: {
         uColor: { value: new Color(opts.atmosphereColor ?? 0x5aa9ff) },
         uSunDir: { value: this.sunDir },
-        uIntensity: { value: opts.atmosphere ?? 1.15 },
+        uIntensity: { value: opts.atmosphere ?? 2.4 },
       },
       side: BackSide,
       blending: AdditiveBlending,
       transparent: true,
       depthWrite: false,
     });
-    this.atmosphere = new Mesh(makeGlobeGeometry(96, 48, 1.035), this.atmoMaterial);
+    // Wide enough that the halo has room to be a gradient rather than a line.
+    this.atmosphere = new Mesh(makeGlobeGeometry(96, 48, 1.10), this.atmoMaterial);
     this.atmosphere.frustumCulled = false;
     this.atmosphere.renderOrder = 2;
   }
@@ -423,7 +469,7 @@ export class Globe {
 
   setQuality(renderer: WebGLRenderer, low: boolean): void {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 1.5));
-    this.atmoMaterial.uniforms.uIntensity.value = low ? 0.7 : 1.15;
+    this.atmoMaterial.uniforms.uIntensity.value = low ? 1.5 : 2.4;
   }
 
   dispose(): void {

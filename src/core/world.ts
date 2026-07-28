@@ -139,7 +139,10 @@ export const CLIMATE_NAME: Readonly<Record<string, string>> = {
  * gradient of where you have been rather than a bag of skittles.
  */
 export const CLIMATE_COLOR: Readonly<Record<string, number>> = {
-  Ocean: 0x2b8ca8,
+  // Jade rather than the sea-teal it started as. The body has to read against
+  // whatever it is crossing, and an ocean-coloured snake on the ocean is
+  // invisible exactly when you are furthest from anything else to look at.
+  Ocean: 0x2fd6a8,
   Af: 0x0f9b52, Am: 0x1eb463, Aw: 0x6fc04a,
   BWh: 0xe8a838, BWk: 0xd9b06a, BSh: 0xd98b3e, BSk: 0xc9a76b,
   Csa: 0xb5c94a, Csb: 0x8fbf58, Csc: 0x76b070,

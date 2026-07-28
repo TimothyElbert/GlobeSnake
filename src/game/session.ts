@@ -11,7 +11,7 @@ import {
 } from './targets';
 import {
   GROWTH_PER_CAPTURE_DEG, MAX_HINT_LEVEL, RECOGNITION_GRACE, SHIP_BONUS, SHIP_BOOST_SECONDS,
-  hintMultiplier, scoreCapture, type CaptureBreakdown,
+  TIER_BASE, hintMultiplier, scoreCapture, streakMultiplier, type CaptureBreakdown,
 } from './scoring';
 
 export type GameMode = 'endless' | 'daily' | 'relay';
@@ -143,11 +143,24 @@ export class Session {
     return Math.max(this.paidHintLevel, this.autoHintShown ? 1 : 0);
   }
 
+  /**
+   * The target's nominal worth: what it pays for an on-par, hint-free find.
+   *
+   * Hint prices are quoted against *this*, not against what the target is worth
+   * right now. Pricing against the decaying live value would mean the longer
+   * you flounder the cheaper help becomes — which rewards stalling and quietly
+   * inverts the whole point of a hint economy.
+   */
+  get nominalValue(): number {
+    if (!this.target) return 0;
+    return Math.round(TIER_BASE[Math.min(Math.max(this.target.tier, 1), 5)] * streakMultiplier(this.streak));
+  }
+
   /** What the *next* hint press would cost, in points. */
   get nextHintCost(): number {
     if (!this.target || this.paidHintLevel >= this.maxHint) return 0;
-    const full = this.projectedValue(0);
-    return Math.round(full * (hintMultiplier(this.paidHintLevel) - hintMultiplier(this.paidHintLevel + 1)));
+    const drop = hintMultiplier(this.paidHintLevel) - hintMultiplier(this.paidHintLevel + 1);
+    return Math.round(this.nominalValue * drop);
   }
 
   /**

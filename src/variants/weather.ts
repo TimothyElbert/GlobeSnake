@@ -214,6 +214,12 @@ export class WindField {
 
 const _tangential = new Vector3();
 const _swirl = new Vector3();
+const _axis = new Vector3();
+const _tip = new Vector3();
+
+/** How many seconds of travel each streak depicts, and its float height. */
+const STREAK_SECONDS = 0.038;
+const LIFT = 1.004;
 
 /**
  * Streamlines.
@@ -275,26 +281,36 @@ export class WindStreaks {
       if (q.age > q.life || q.p.dot(centre) < 0.05) this.respawn(i, centre, rng);
 
       const o = i * 6;
-      // Previous point is where it was; current is where the wind took it.
-      pos[o] = q.p.x * 1.006; pos[o + 1] = q.p.y * 1.006; pos[o + 2] = q.p.z * 1.006;
-
       this.field.sample(q.p, this.wind);
       const speed = this.wind.length();
+
+      // The streak is the *velocity vector*, not the distance moved since the
+      // last frame. Drawing a per-frame delta made every streak a sub-pixel
+      // dot that vanished at any frame rate, and worse, made the visuals
+      // depend on frame rate. Now length reads directly as wind speed, which
+      // is the whole promise of this variant: you can see the push coming.
+      pos[o] = q.p.x * LIFT; pos[o + 1] = q.p.y * LIFT; pos[o + 2] = q.p.z * LIFT;
       if (speed > 1e-6) {
-        const axis = _tangential.copy(q.p).cross(this.wind).normalize();
-        q.p.applyAxisAngle(axis, speed * DEG * dt * 5.5).normalize();
+        _axis.copy(q.p).cross(this.wind).normalize();
+        _tip.copy(q.p).applyAxisAngle(_axis, Math.min(speed * STREAK_SECONDS, 0.10)).normalize();
+        pos[o + 3] = _tip.x * LIFT; pos[o + 4] = _tip.y * LIFT; pos[o + 5] = _tip.z * LIFT;
+        q.p.applyAxisAngle(_axis, speed * DEG * dt * 6).normalize();
+      } else {
+        pos[o + 3] = pos[o]; pos[o + 4] = pos[o + 1]; pos[o + 5] = pos[o + 2];
       }
 
-      pos[o + 3] = q.p.x * 1.006; pos[o + 4] = q.p.y * 1.006; pos[o + 5] = q.p.z * 1.006;
-
       // Fade in and out so streaks do not pop, and colour by wind speed:
-      // cool blue when calm, hot white in a jet or an eyewall.
+      // cool blue when calm, hot white in a jet or an eyewall. Bright, because
+      // these are drawn additively over a sunlit Sahara as often as over a
+      // night ocean, and they have to survive both.
       const fade = Math.min(1, q.age / 0.35) * Math.min(1, (q.life - q.age) / 0.6);
-      const heat = Math.min(1, speed / 2.6);
-      const r = (0.30 + heat * 0.70) * fade;
-      const g = (0.62 + heat * 0.34) * fade;
-      const b = (0.95 + heat * 0.05) * fade;
-      col[o] = r * 0.35; col[o + 1] = g * 0.35; col[o + 2] = b * 0.35;
+      const heat = Math.min(1, speed / 2.4);
+      const amp = (0.55 + heat * 1.35) * fade;
+      const r = (0.34 + heat * 0.66) * amp;
+      const g = (0.72 + heat * 0.28) * amp;
+      const b = amp;
+      // Dark at the tail, bright at the head, so each streak reads directionally.
+      col[o] = r * 0.15; col[o + 1] = g * 0.15; col[o + 2] = b * 0.15;
       col[o + 3] = r; col[o + 4] = g; col[o + 5] = b;
     }
     const geo = this.lines.geometry;

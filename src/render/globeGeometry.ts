@@ -54,8 +54,12 @@ export function makeGlobeGeometry(lonSegments = 256, latSegments = 128, radius =
       const b = a + 1;
       const d = a + cols;
       const e = d + 1;
-      indices[i++] = a; indices[i++] = d; indices[i++] = b;
-      indices[i++] = b; indices[i++] = d; indices[i++] = e;
+      // Counter-clockwise seen from outside, so front faces are the outside.
+      // The first cut had these reversed, which meant a BackSide shell rendered
+      // the *near* hemisphere — and the atmosphere glow blanketed the entire
+      // planet instead of hugging the limb.
+      indices[i++] = a; indices[i++] = b; indices[i++] = d;
+      indices[i++] = b; indices[i++] = e; indices[i++] = d;
     }
   }
 

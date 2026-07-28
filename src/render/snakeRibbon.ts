@@ -80,11 +80,13 @@ const FRAG = /* glsl */ `
 
     // A darker belly line and a lit spine give the tube a readable axis.
     col *= 1.0 - 0.22 * smoothstep(0.55, 1.0, abs(across));
-    col += vColor * 0.35 * pow(bulge, 6.0);
+    col += vColor * 0.22 * pow(bulge, 6.0);
 
-    // Rim light picks the body off the planet behind it.
+    // Rim light picks the body off the planet behind it. Kept low: at half
+    // strength it bleached the body to near-white and threw away the entire
+    // point of colouring it by biome.
     float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 2.4);
-    col += uRimColor * rim * 0.5;
+    col += uRimColor * rim * 0.22;
 
     // Wake-riding: a bright pulse travels the drafted stretch of body.
     if (uWake > 0.001) {
@@ -145,7 +147,7 @@ export class SnakeRibbon {
   private builtLast = -1;
 
   constructor(opts: RibbonOptions = {}) {
-    this.width = opts.width ?? 0.0092;
+    this.width = opts.width ?? 0.0135;
     this.lift = opts.lift ?? 0.0035;
     this.maxNodes = opts.maxNodes ?? DEFAULT_MAX_NODES;
     const MAX_RIBBON_NODES = this.maxNodes;
@@ -204,7 +206,10 @@ export class SnakeRibbon {
    * never has to change again — which is what makes the incremental path below
    * legal for a trail that never releases its tail.
    */
+  private taperNodes = TAPER_NODES;
+
   private writeRange(snake: Snake, first: number, last: number, from: number, to: number): void {
+    this.taperNodes = Math.max(6, Math.min(TAPER_NODES, (last - first) * 0.3));
     const pos = this.positions;
     const nrm = this.normals;
     const cols = this.colors;
@@ -228,8 +233,11 @@ export class SnakeRibbon {
 
       const fromTail = k;
       const fromHead = last - i;
-      const taperTail = Math.min(1, Math.pow(fromTail / TAPER_NODES, 0.55));
-      const taperHead = 1 - 0.3 * Math.pow(Math.max(0, 1 - fromHead / 26), 2);
+      // The taper length has to be capped against the body's own length. A
+      // fixed 90-node taper on a 58-node starting body meant the *entire*
+      // snake was tail, and it rendered as a needle rather than an animal.
+      const taperTail = Math.min(1, Math.pow(fromTail / this.taperNodes, 0.5));
+      const taperHead = 1 - 0.28 * Math.pow(Math.max(0, 1 - fromHead / 22), 2);
       const w = this.width * taperTail * taperHead;
 
       // Blend each node's climate with its neighbour so biome changes read as

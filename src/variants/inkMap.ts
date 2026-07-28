@@ -93,6 +93,17 @@ export class InkMap {
     return this.rt.texture;
   }
 
+  /** Dev only: how much of the map has been inked, as a 0..1 fraction. */
+  coverage(renderer: WebGLRenderer): number {
+    const w = 64;
+    const h = 32;
+    const buf = new Uint8Array(w * h * 4);
+    renderer.readRenderTargetPixels(this.rt, 0, 0, w, h, buf);
+    let sum = 0;
+    for (let i = 0; i < w * h; i++) sum += buf[i * 4];
+    return sum / (w * h * 255);
+  }
+
   /** Wipe the map. Called at the start of a run, never during one. */
   clear(renderer: WebGLRenderer): void {
     const prev = renderer.getRenderTarget();

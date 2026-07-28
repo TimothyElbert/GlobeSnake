@@ -11,6 +11,7 @@ import { climateColor } from '@core/world';
 const _bin = new Vector3();
 const _col = new Color();
 const _lookAt = new Vector3();
+const _white = new Color(0xffffff);
 
 /**
  * The head.
@@ -76,8 +77,10 @@ export class SnakeHead {
     this.group.matrixWorldNeedsUpdate = true;
 
     _col.setHex(climateColor(climate));
-    // Keep the head a shade brighter than the body it leads.
-    this.material.color.copy(_col).lerp(new Color(0xffffff), 0.22);
+    // A shade brighter than the body it leads — but only a shade. Pushed
+    // further it stops reading as a head and starts reading as a white bead
+    // stuck on the front.
+    this.material.color.copy(_col).lerp(_white, 0.12);
 
     this.tongueTimer += time;
     const flick = Math.max(0, Math.sin(time * 2.1));

@@ -27,6 +27,11 @@ export class GameLoop {
     this.stepSeconds = 1 / stepHz;
   }
 
+  /** Draw one frame outside the rAF schedule. Used by the dev capture hook. */
+  renderFrame(alpha: number, frameDt: number): void {
+    this.onRender(alpha, frameDt);
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;

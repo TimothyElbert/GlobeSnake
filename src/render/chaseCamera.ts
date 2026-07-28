@@ -49,8 +49,8 @@ export class ChaseCamera {
   private readonly tau: number;
 
   /** 0 = closest, 1 = widest. */
-  zoom = 0.42;
-  private zoomTarget = 0.42;
+  zoom = 0.3;
+  private zoomTarget = 0.3;
 
   constructor(aspect: number, opts: ChaseCameraOptions = {}) {
     this.followAngle = opts.followAngle ?? 0.235;

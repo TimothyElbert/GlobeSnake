@@ -4,7 +4,7 @@ import {
 import { GameLoop, todaySeed } from '@core/loop';
 import { InputManager } from '@core/input';
 import { WorldData, type Terrain } from '@core/world';
-import type { SnakeConfig } from '@core/snake';
+import { DEFAULT_SNAKE_CONFIG, type SnakeConfig } from '@core/snake';
 import { Globe, type GlobeOptions } from '@render/globe';
 import { SnakeRibbon, type RibbonOptions } from '@render/snakeRibbon';
 import { ChaseCamera } from '@render/chaseCamera';
@@ -100,16 +100,27 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     antialias: true,
     powerPreference: 'high-performance',
     stencil: false,
+    // Only in dev: toDataURL needs the back buffer to survive past the draw
+    // call, and it costs real memory bandwidth, so production never pays for it.
+    preserveDrawingBuffer: import.meta.env.DEV,
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.02;
+  renderer.toneMappingExposure = 0.94;
   renderer.outputColorSpace = SRGBColorSpace;
 
   const scene = new Scene();
   const globe = new Globe(world, day, night, config.globe);
-  const ribbon = new SnakeRibbon(config.ribbon);
+  // The drawn body and the lethal body are the same object, so the ribbon's
+  // half-width is *derived* from the collision radius rather than tuned next to
+  // it. A snake that looks fatter than it kills — or thinner — is the kind of
+  // unfairness players correctly never forgive.
+  const collisionRadiusDeg = config.snake?.collisionRadiusDeg ?? DEFAULT_SNAKE_CONFIG.collisionRadiusDeg;
+  const ribbon = new SnakeRibbon({
+    width: collisionRadiusDeg * (Math.PI / 180),
+    ...config.ribbon,
+  });
   const head = new SnakeHead();
   // Two pins, not one. The hint pin is owned by applyHints and is cleared every
   // frame the hint level says it should not be visible; sharing it with the
@@ -293,18 +304,20 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
 
   // --- the loop -------------------------------------------------------------
 
+  function fixedStep(dt: number): void {
+    if (!session || !ctx) return;
+    if (session.phase !== 'playing' && session.phase !== 'captured') return;
+    const cfg = session.snake.cfg;
+    const steer = input.sample(
+      session.snake.position, session.snake.heading, 1,
+      (cfg.turnRateDeg * Math.PI) / 180 * dt,
+    );
+    session.update(dt, steer);
+    config.onFixed?.(ctx, dt);
+  }
+
   const loop = new GameLoop(
-    (dt) => {
-      if (!session || !ctx) return;
-      if (session.phase !== 'playing' && session.phase !== 'captured') return;
-      const cfg = session.snake.cfg;
-      const steer = input.sample(
-        session.snake.position, session.snake.heading, 1,
-        (cfg.turnRateDeg * Math.PI) / 180 * dt,
-      );
-      session.update(dt, steer);
-      config.onFixed?.(ctx, dt);
-    },
+    fixedStep,
     (_alpha, frameDt) => {
       time += frameDt;
       if (ctx) ctx.time = time;
@@ -373,8 +386,37 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   if (import.meta.env.DEV) {
     (window as unknown as Record<string, unknown>).__gs = {
       get session() { return session; },
-      world, globe, camera, ribbon, loop, config,
+      world, globe, camera, ribbon, loop, config, scene, renderer, canvas,
       beginRun,
+      /**
+       * Advance and render `seconds` of game time synchronously, then return a
+       * JPEG data URL. Headless browsers never fire requestAnimationFrame, so
+       * without this the renderer is completely unobservable — and "it compiles"
+       * is not the same claim as "the planet is on screen".
+       */
+      capture(seconds = 0, w = 640, h = 360, quality = 0.72) {
+        const steps = Math.round(seconds * 120);
+        for (let i = 0; i < steps; i++) fixedStep(1 / 120);
+        const prevW = renderer.domElement.width;
+        const prevH = renderer.domElement.height;
+        renderer.setSize(w, h, false);
+        camera.resize(w / h);
+        loop.renderFrame(0, seconds > 0 ? seconds : 1 / 60);
+        const url = renderer.domElement.toDataURL('image/jpeg', quality);
+        renderer.setSize(prevW, prevH, false);
+        camera.resize(prevW / prevH);
+        return url;
+      },
+      /** Capture and POST straight to disk via the dev screenshot sink. */
+      async shot(name: string, seconds = 0, w = 1000, h = 600) {
+        const data = (this as { capture(s: number, w: number, h: number, q: number): string })
+          .capture(seconds, w, h, 0.9);
+        const res = await fetch('/__shot', {
+          method: 'POST',
+          body: JSON.stringify({ name, data }),
+        });
+        return res.json();
+      },
       // Mirrors the real fixed-step callback, variant hook included — a harness
       // that skips onFixed would happily report that Tempest has no wind.
       step(n: number, turn = 0, boost = false, brake = false) {

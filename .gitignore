@@ -7,3 +7,4 @@ tools/bake/.cache/
 screenshots/
 .vite/
 *.tsbuildinfo
+screenshots/

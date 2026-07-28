@@ -3,12 +3,14 @@
 <path fill="currentColor" fill-rule="evenodd" d="M24 168V96H176V168ZM36 168V104h16V168ZM64 168V104h16V168ZM92 168V104h16V168ZM120 168V104h16V168ZM148 168V104h16V168Z"/>
 <path fill="currentColor" d="M20 84H180V96H20Z"/>
 <path fill="currentColor" d="M30 70H170V84H30Z"/>
-<path fill="currentColor" d="M58 70L58 60L54 50L58 38L62 40L61 46L66 44L70 36L74 38L72 46L77 44L81 35L84 37L82 46Q88 44 92 48L102 48L102 70H97V56H90V70H82V58H72V70Z"/>
-<path fill="currentColor" d="M98 50H122V60H98Z"/>
-<path fill="currentColor" fill-rule="evenodd" d="M102 62a8 8 0 1 0 16 0a8 8 0 1 0-16 0ZM105.5 62a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0-9 0Z"/>
-<path fill="currentColor" d="M122.5 36a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0Z"/>
-<path fill="currentColor" d="M122 42L130 42L132 70H120Z"/>
-<path fill="currentColor" d="M130 44Q142 38 144 48Q136 50 130 52Z"/>
-<path fill="currentColor" d="M134 26h2V60h-2Z"/>
-<path fill="currentColor" fill-rule="evenodd" d="M131 24a4 4 0 1 0 8 0a4 4 0 1 0-8 0ZM133 24a2 2 0 1 0 4 0a2 2 0 1 0-4 0Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M56 50H98Q101 53 101 58L101 70H95L94 60H84L84 70H78L77 60H68L66 70H60L60 58Q57 53 56 50Z"/>
+<path fill="currentColor" d="M58 50Q54 42 48 38L40 40L39 36L46 31L48 25L51 30Q57 32 59 38L64 50Z"/>
+<path fill="currentColor" d="M72 50Q68 40 62 36L54 38L53 34L60 29L62 23L65 28Q71 30 73 36L78 50Z"/>
+<path fill="currentColor" d="M96 50H118V58H96Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M98 63a8 8 0 1 0 16 0a8 8 0 1 0-16 0ZM101.5 63a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0-9 0Z"/>
+<path fill="currentColor" d="M116.5 34a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0Z"/>
+<path fill="currentColor" d="M116 40H124L126 70H114Z"/>
+<path fill="currentColor" d="M124 42Q136 36 138 46Q130 48 124 50Z"/>
+<path fill="currentColor" d="M127.2 24h1.6V56h-1.6Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M124 24a4 4 0 1 0 8 0a4 4 0 1 0-8 0ZM126 24a2 2 0 1 0 4 0a2 2 0 1 0-4 0Z"/>
 </svg>

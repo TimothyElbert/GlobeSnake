@@ -131,6 +131,22 @@ export class Hud {
     this.vignette.style.display = v ? '' : 'none';
   }
 
+  /**
+   * Silhouettes and outlines are drawn with `fill="currentColor"` so the game
+   * can tint them — but an SVG loaded through an `<img>` tag is a separate
+   * document and inherits nothing, so `currentColor` would resolve to black and
+   * the shape would vanish against the dark HUD. A CSS mask paints the element's
+   * own background through the artwork instead, which both keeps the tint and
+   * lets a single file serve the light parchment of Terra and the dark sky of
+   * Expedition. Flags stay as real images: they have their own colours.
+   */
+  private maskShape(url: string, label: string): HTMLElement {
+    const node = el('div', { class: 'prompt-image mask', role: 'img', 'aria-label': label });
+    node.style.setProperty('-webkit-mask-image', `url("${url}")`);
+    node.style.maskImage = `url("${url}")`;
+    return node;
+  }
+
   /** Render a new target prompt, including flags, outlines and silhouettes. */
   setTarget(t: LiveTarget, index: number, total: number): void {
     clearChildren(this.promptImageSlot);
@@ -147,20 +163,12 @@ export class Hud {
       this.promptName.style.display = 'none';
     } else if (t.image?.type === 'outline' && t.image.iso3) {
       this.promptKicker.textContent = 'WHICH COUNTRY IS THIS?';
-      this.promptImageSlot.append(el('img', {
-        class: 'prompt-image',
-        src: `${base}outlines/${t.image.iso3}.svg`,
-        alt: 'The outline of a country',
-      }));
+      this.promptImageSlot.append(this.maskShape(`${base}outlines/${t.image.iso3}.svg`, 'The outline of a country'));
       this.promptName.textContent = '';
       this.promptName.style.display = 'none';
     } else if (t.image?.type === 'silhouette' && t.image.id) {
       this.promptKicker.textContent = 'FIND THIS LANDMARK';
-      this.promptImageSlot.append(el('img', {
-        class: 'prompt-image',
-        src: `${base}silhouettes/${t.image.id}.svg`,
-        alt: 'The silhouette of a landmark',
-      }));
+      this.promptImageSlot.append(this.maskShape(`${base}silhouettes/${t.image.id}.svg`, 'The silhouette of a landmark'));
       this.promptName.textContent = '';
       this.promptName.style.display = 'none';
     } else {

@@ -82,6 +82,7 @@ void bootstrap({
     ink = new InkMap();
     ink.clear(ctx.renderer);
     ctx.globe.setInkTexture(ink.texture);
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__ink = ink;
   },
 
   onReset(ctx) {

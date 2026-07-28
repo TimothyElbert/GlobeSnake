@@ -147,6 +147,17 @@ canvas { display: block; touch-action: none; }
   border-radius: 3px;
   outline: 1px solid rgba(255, 255, 255, 0.28);
 }
+.prompt-image.mask {
+  width: clamp(90px, 16vw, 150px);
+  background-color: var(--ink);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.55));
+}
 .prompt-meta {
   display: flex;
   gap: 14px;
