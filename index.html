@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#04070d" />
+    <title>Globe Snake</title>
+    <meta name="description" content="Snake, on a 3D globe of the real Earth. Hunt real places — from Brazil to Point Nemo — across three different worlds." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%232b8ca8'/><path d='M4 18q8-9 14-2t10-4' stroke='%2348d8a8' stroke-width='3.5' fill='none' stroke-linecap='round'/></svg>" />
+  </head>
+  <body class="launcher">
+    <canvas id="backdrop"></canvas>
+
+    <main>
+      <header>
+        <p class="eyebrow">Snake, on a planet</p>
+        <h1>Globe&nbsp;Snake</h1>
+        <p class="lede">
+          The old game — eat, grow, never touch yourself — played on the surface of the real Earth.
+          The food is places. <em>Brazil</em> is easy. <em>Paris</em> is harder. <em>Big Ben</em> is harder still,
+          and somewhere past that lies Point Nemo, the furthest spot on the planet from anywhere at all.
+          Find them fast, find them without help, and the points come. Mountains slow you down.
+          Rivers carry you. Your own tail is getting longer.
+        </p>
+        <p class="lede">Three worlds, one snake. Start on the left.</p>
+      </header>
+
+      <nav class="worlds">
+        <a class="world expedition" href="expedition/">
+          <span class="badge">The canonical world</span>
+          <h2>Expedition</h2>
+          <p>
+            NASA's Blue Marble, city lights on the night side, real elevation under every metre you travel.
+            The full rule set, played straight. Start here.
+          </p>
+          <span class="go">Play Expedition →</span>
+        </a>
+
+        <a class="world tempest" href="tempest/">
+          <span class="badge">The wind takes a side</span>
+          <h2>Tempest</h2>
+          <p>
+            The same Earth, alive with weather. Jet streams run east in visible rivers of air; ocean gyres
+            turn beneath you; hurricanes wander with real teeth. Ride the wind and cross an ocean in seconds —
+            or fight it the whole way.
+          </p>
+          <span class="go">Play Tempest →</span>
+        </a>
+
+        <a class="world terra" href="terra/">
+          <span class="badge">Draw it yourself</span>
+          <h2>Terra Incognita</h2>
+          <p>
+            A blank vellum globe and a pen for a snake. The world inks itself in behind you, and it never
+            fades — every line you draw is a wall for the rest of the run. There is no pin hint here.
+            Only a bearing, a distance, and your own nerve.
+          </p>
+          <span class="go">Play Terra Incognita →</span>
+        </a>
+      </nav>
+
+      <footer>
+        <div class="how">
+          <h3>How it plays</h3>
+          <ul>
+            <li><b>←&nbsp;→</b> steer, <b>↑</b> boost, <b>↓</b> brake and turn tighter. Or just move the mouse — the snake chases your cursor.</li>
+            <li><b>Space</b> buys a hint against the current target's value. It never touches points you have already banked.</li>
+            <li>Stuck for twice the par time and the first hint arrives free. You cannot get permanently lost.</li>
+            <li>Every run ends with a route card: your whole journey, coloured by the climates you crossed.</li>
+          </ul>
+        </div>
+        <p class="credits">
+          Built with Three.js. Imagery from NASA's Blue&nbsp;Marble and GEBCO elevation (public domain).
+          Coastlines, borders, rivers and glaciers from Natural&nbsp;Earth (public domain).
+          Climate from the Köppen-Geiger classification of Beck&nbsp;et&nbsp;al. (CC&nbsp;BY&nbsp;4.0).
+          Flags from flag-icons (MIT). Landmark silhouettes drawn for this game.
+          No tracking, no accounts, no network calls once it has loaded.
+        </p>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/launcher.ts"></script>
+  </body>
+</html>

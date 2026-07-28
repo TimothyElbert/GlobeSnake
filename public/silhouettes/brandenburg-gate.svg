@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<path fill="currentColor" d="M20 168H180V176H20Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M24 168V96H176V168ZM36 168V104h16V168ZM64 168V104h16V168ZM92 168V104h16V168ZM120 168V104h16V168ZM148 168V104h16V168Z"/>
+<path fill="currentColor" d="M20 84H180V96H20Z"/>
+<path fill="currentColor" d="M30 70H170V84H30Z"/>
+<path fill="currentColor" d="M58 70L58 60L54 50L58 38L62 40L61 46L66 44L70 36L74 38L72 46L77 44L81 35L84 37L82 46Q88 44 92 48L102 48L102 70H97V56H90V70H82V58H72V70Z"/>
+<path fill="currentColor" d="M98 50H122V60H98Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M102 62a8 8 0 1 0 16 0a8 8 0 1 0-16 0ZM105.5 62a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0-9 0Z"/>
+<path fill="currentColor" d="M122.5 36a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0Z"/>
+<path fill="currentColor" d="M122 42L130 42L132 70H120Z"/>
+<path fill="currentColor" d="M130 44Q142 38 144 48Q136 50 130 52Z"/>
+<path fill="currentColor" d="M134 26h2V60h-2Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M131 24a4 4 0 1 0 8 0a4 4 0 1 0-8 0ZM133 24a2 2 0 1 0 4 0a2 2 0 1 0-4 0Z"/>
+</svg>

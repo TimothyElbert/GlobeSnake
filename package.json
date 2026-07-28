@@ -1,0 +1,28 @@
+{
+  "name": "globe-snake",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Snake on a 3D globe: hunt real-world locations across a living Earth.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "bake": "node tools/bake/index.mjs",
+    "bake:force": "node tools/bake/index.mjs --force",
+    "validate:targets": "node tools/validate-targets.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/three": "^0.185.1",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.35.3",
+    "topojson-client": "^3.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  }
+}

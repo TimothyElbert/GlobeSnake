@@ -1,0 +1,452 @@
+import { Vector3 } from 'three';
+import { DEG, EARTH_RADIUS_KM, angleBetween, bearingDeg, fromLatLon, tangentToward } from '@core/sphere';
+import { Snake, type SnakeConfig, type SteerInput } from '@core/snake';
+import { WorldData, Terrain, isWater } from '@core/world';
+import { mulberry32, todaySeed } from '@core/loop';
+import { RouteGrid } from './par';
+import { ShipFleet } from './ships';
+import {
+  DECKS, DifficultyDrift, TargetPool, isCaptured,
+  type Deck, type LiveTarget, type TargetRecord,
+} from './targets';
+import {
+  GROWTH_PER_CAPTURE_DEG, MAX_HINT_LEVEL, RECOGNITION_GRACE, SHIP_BONUS, SHIP_BOOST_SECONDS,
+  hintMultiplier, scoreCapture, type CaptureBreakdown,
+} from './scoring';
+
+export type GameMode = 'endless' | 'daily' | 'relay';
+export type Phase = 'idle' | 'playing' | 'paused' | 'captured' | 'dead' | 'finished';
+
+export interface SessionOptions {
+  mode: GameMode;
+  deck: Deck;
+  snake?: Partial<SnakeConfig>;
+  /** Daily mode: how many targets make a run. */
+  dailyLength?: number;
+  /** Relay mode: starting clock and the bonus each capture adds. */
+  relaySeconds?: number;
+  relayBonusSeconds?: number;
+  seed?: number;
+  /**
+   * Where the hint ladder stops. Terra Incognita caps at 2 — bearing and range
+   * only, no pin — which is how that variant earns its difficulty without
+   * resorting to hiding the map.
+   */
+  maxHintLevel?: number;
+}
+
+export interface CaptureEvent {
+  target: LiveTarget;
+  breakdown: CaptureBreakdown;
+  totalScore: number;
+  index: number;
+}
+
+export interface SessionEvents {
+  onTarget?: (t: LiveTarget, index: number, parSeconds: number) => void;
+  onCapture?: (e: CaptureEvent) => void;
+  onHint?: (level: number, costPoints: number) => void;
+  onShip?: (position: Vector3, bonus: number) => void;
+  onDeath?: () => void;
+  onFinish?: () => void;
+}
+
+/** One row of the end-of-run report and the share card. */
+export interface RunLogEntry {
+  name: string;
+  tier: number;
+  seconds: number;
+  parSeconds: number;
+  hintLevel: number;
+  points: number;
+  lat: number;
+  lon: number;
+}
+
+const _tmp = new Vector3();
+const _dir = new Vector3();
+
+export class Session {
+  readonly snake: Snake;
+  readonly ships: ShipFleet;
+  readonly pool: TargetPool;
+  readonly drift: DifficultyDrift;
+  readonly routes: RouteGrid;
+  readonly options: SessionOptions;
+
+  phase: Phase = 'idle';
+  score = 0;
+  streak = 0;
+  bestStreak = 0;
+  targetIndex = 0;
+  elapsed = 0;
+
+  /** Current target and its clock. */
+  target: LiveTarget | null = null;
+  targetElapsed = 0;
+  parSeconds = 0;
+  paidHintLevel = 0;
+  autoHintShown = false;
+
+  /** Relay mode clock. */
+  clock = 0;
+
+  private readonly dailyPlan: LiveTarget[] = [];
+  readonly log: RunLogEntry[] = [];
+  /** Trail snapshot for the share card: [lat, lon, climate] triples. */
+  readonly traceLat: number[] = [];
+  readonly traceLon: number[] = [];
+  readonly traceClimate: number[] = [];
+  private traceAccum = 0;
+
+  /** Set >0 after a capture: the world runs slow while the new prompt lands. */
+  captureSlowdown = 0;
+  shipBoost = 0;
+
+  private rng: () => number;
+  private events: SessionEvents = {};
+
+  constructor(
+    private readonly world: WorldData,
+    records: TargetRecord[],
+    options: SessionOptions,
+  ) {
+    this.options = {
+      dailyLength: 10,
+      relaySeconds: 120,
+      relayBonusSeconds: 8,
+      maxHintLevel: MAX_HINT_LEVEL,
+      ...options,
+    };
+    this.rng = mulberry32(this.options.seed ?? (Math.random() * 2 ** 32) >>> 0);
+    this.pool = new TargetPool(records, world);
+    this.routes = new RouteGrid(world);
+    this.drift = new DifficultyDrift(DECKS[this.options.deck]);
+    this.snake = new Snake(world, this.options.snake);
+    this.ships = new ShipFleet(world);
+  }
+
+  setEvents(e: SessionEvents): void {
+    this.events = e;
+  }
+
+  get deckRule() {
+    return DECKS[this.options.deck];
+  }
+
+  get maxHint(): number {
+    return this.options.maxHintLevel ?? MAX_HINT_LEVEL;
+  }
+
+  /** Visible hint level: paid hints, plus the free one the game gives away. */
+  get hintLevel(): number {
+    return Math.max(this.paidHintLevel, this.autoHintShown ? 1 : 0);
+  }
+
+  /** What the *next* hint press would cost, in points. */
+  get nextHintCost(): number {
+    if (!this.target || this.paidHintLevel >= this.maxHint) return 0;
+    const full = this.projectedValue(0);
+    return Math.round(full * (hintMultiplier(this.paidHintLevel) - hintMultiplier(this.paidHintLevel + 1)));
+  }
+
+  /**
+   * What this target is currently worth. Hint costs are quoted against the
+   * target's *original* value, so stalling never makes a hint cheaper — you
+   * cannot wait out the price.
+   */
+  projectedValue(hintLevel = this.paidHintLevel): number {
+    if (!this.target) return 0;
+    return scoreCapture(this.target.tier, this.targetElapsed, this.parSeconds, hintLevel, this.streak).total;
+  }
+
+  start(): void {
+    this.score = 0;
+    this.streak = 0;
+    this.bestStreak = 0;
+    this.targetIndex = 0;
+    this.elapsed = 0;
+    this.log.length = 0;
+    this.traceLat.length = 0;
+    this.traceLon.length = 0;
+    this.traceClimate.length = 0;
+    this.clock = this.options.relaySeconds ?? 120;
+    this.pool.resetUsed();
+    this.drift.reset();
+    this.ships.reset();
+    this.captureSlowdown = 0;
+    this.shipBoost = 0;
+    if (this.options.mode === 'daily') this.buildDailyPlan();
+
+    const spawn = this.findSpawn();
+    this.snake.reset(spawn.position, spawn.heading);
+    this.phase = 'playing';
+    this.nextTarget();
+  }
+
+  /**
+   * Spawn somewhere pleasant: on land, away from ice, and in the tropics-to-
+   * temperate band. Waking up in the middle of the Southern Ocean with no
+   * landmark in sight is a terrible first ten seconds.
+   */
+  private findSpawn(): { position: Vector3; heading: Vector3 } {
+    for (let i = 0; i < 400; i++) {
+      const lat = (this.rng() * 100 - 50);
+      const lon = (this.rng() * 360 - 180);
+      const p = fromLatLon(lat, lon);
+      const t = this.world.terrainAt(p);
+      if (isWater(t) || t === Terrain.Ice || t === Terrain.Mountain) continue;
+      // Inside a named country, not on an unclaimed speck: the first thing the
+      // HUD says is "You are in —", and it should say somewhere.
+      if (this.world.countryAt(p) === 0) continue;
+      const h = new Vector3();
+      tangentToward(p, fromLatLon(lat + 10, lon), h);
+      return { position: p, heading: h };
+    }
+    const p = fromLatLon(0, 20);
+    return { position: p, heading: tangentToward(p, fromLatLon(10, 20)) };
+  }
+
+  /**
+   * The daily gauntlet.
+   *
+   * "Everyone on Earth got these ten, in this order" has to be literally true
+   * or the share card is a lie. So the daily plan is drawn up front from the
+   * date seed alone, on a fixed tier ladder, with no reference to the player's
+   * trail or performance — the adaptive difficulty and the trail-obstruction
+   * bias that make free play interesting are exactly what would make a daily
+   * diverge between two people.
+   */
+  private buildDailyPlan(): void {
+    this.dailyPlan.length = 0;
+    const ladder = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5];
+    const n = this.options.dailyLength ?? 10;
+    const taken = new Set<string>();
+    for (let i = 0; i < n; i++) {
+      const tier = ladder[i % ladder.length];
+      const t = this.pool.pickPure(tier, this.rng, taken);
+      if (t) { taken.add(t.id); this.dailyPlan.push(t); }
+    }
+  }
+
+  private nextTarget(): void {
+    const t = this.options.mode === 'daily'
+      ? this.dailyPlan[this.targetIndex] ?? null
+      : this.pool.pick(this.drift.tier, this.snake, this.rng);
+    if (!t) { this.finish(); return; }
+    this.target = t;
+    this.targetElapsed = 0;
+    this.paidHintLevel = 0;
+    this.autoHintShown = false;
+
+    // Par is the terrain-aware best route, not the straight line: 2,000 km over
+    // the Himalayas is not the same problem as 2,000 km over the steppe, and
+    // scoring both the same would make spawn geometry beat skill.
+    const costDeg = this.routes.routeCostDeg(this.snake.position, t.position);
+    this.parSeconds = costDeg / this.snake.cfg.baseSpeedDeg + RECOGNITION_GRACE;
+
+    this.events.onTarget?.(t, this.targetIndex, this.parSeconds);
+  }
+
+  /** Advance the paid hint ladder. Returns the new level. */
+  requestHint(): number {
+    if (this.phase !== 'playing' || !this.target) return this.paidHintLevel;
+    if (this.paidHintLevel >= this.maxHint) return this.paidHintLevel;
+    const cost = this.nextHintCost;
+    this.paidHintLevel++;
+    this.events.onHint?.(this.paidHintLevel, cost);
+    return this.paidHintLevel;
+  }
+
+  pause(): void {
+    if (this.phase === 'playing') this.phase = 'paused';
+    else if (this.phase === 'paused') this.phase = 'playing';
+  }
+
+  private finish(): void {
+    this.phase = 'finished';
+    this.events.onFinish?.();
+  }
+
+  /** Fixed-timestep update. Returns the steering actually applied. */
+  update(dt: number, input: SteerInput): void {
+    if (this.phase !== 'playing' && this.phase !== 'captured') return;
+
+    this.elapsed += dt;
+
+    // Post-capture beat: a quarter-speed second and a bit while the next prompt
+    // arrives, so reading the new target is never a fight with the controls.
+    if (this.captureSlowdown > 0) {
+      this.captureSlowdown = Math.max(0, this.captureSlowdown - dt);
+      this.snake.speedScale = 0.25 + 0.75 * (1 - this.captureSlowdown / 1.25);
+      if (this.captureSlowdown === 0) this.phase = 'playing';
+    } else {
+      this.snake.speedScale = 1;
+    }
+
+    if (this.shipBoost > 0) {
+      this.shipBoost = Math.max(0, this.shipBoost - dt);
+      this.snake.speedScale *= 1.25;
+    }
+
+    this.snake.update(dt, input);
+
+    if (!this.snake.alive) {
+      this.phase = 'dead';
+      this.events.onDeath?.();
+      return;
+    }
+
+    this.recordTrace(dt);
+    this.ships.update(dt, this.snake.position, this.rng, this.elapsed);
+
+    const caught = this.ships.consumeAt(this.snake.position);
+    if (caught) {
+      this.score += SHIP_BONUS;
+      this.shipBoost = SHIP_BOOST_SECONDS;
+      this.events.onShip?.(caught, SHIP_BONUS);
+    }
+
+    if (this.options.mode === 'relay') {
+      this.clock -= dt;
+      if (this.clock <= 0) { this.clock = 0; this.finish(); return; }
+    }
+
+    if (!this.target || this.phase !== 'playing') return;
+    this.targetElapsed += dt;
+
+    // The promise that you can never get stuck. At twice par the free hint
+    // arrives on its own and costs nothing — the escape hatch must not require
+    // the player to admit defeat and press a button for it.
+    if (!this.autoHintShown && this.paidHintLevel === 0 && this.targetElapsed > this.parSeconds * 2) {
+      this.autoHintShown = true;
+      this.events.onHint?.(1, 0);
+    }
+
+    if (isCaptured(this.target, this.snake.position, this.world)) this.capture();
+  }
+
+  private recordTrace(dt: number): void {
+    // ~4 samples/second is plenty for a share-card polyline and keeps a
+    // fifteen-minute run under 4,000 points.
+    this.traceAccum += dt;
+    if (this.traceAccum < 0.25) return;
+    this.traceAccum = 0;
+    const p = this.snake.position;
+    this.traceLat.push(Math.asin(Math.max(-1, Math.min(1, p.y))) * (180 / Math.PI));
+    this.traceLon.push(Math.atan2(p.z, p.x) * (180 / Math.PI));
+    this.traceClimate.push(this.snake.surface.climate);
+  }
+
+  private capture(): void {
+    const t = this.target!;
+    const breakdown = scoreCapture(
+      t.tier, this.targetElapsed, this.parSeconds, this.paidHintLevel, this.streak,
+    );
+    this.score += breakdown.total;
+
+    if (this.paidHintLevel === 0) {
+      this.streak++;
+      this.bestStreak = Math.max(this.bestStreak, this.streak);
+    } else if (this.paidHintLevel >= 2) {
+      this.streak = 0;
+    }
+
+    this.log.push({
+      name: t.name,
+      tier: t.tier,
+      seconds: this.targetElapsed,
+      parSeconds: this.parSeconds,
+      hintLevel: this.paidHintLevel,
+      points: breakdown.total,
+      lat: t.lat,
+      lon: t.lon,
+    });
+
+    this.snake.grow(GROWTH_PER_CAPTURE_DEG * this.deckRule.growthMultiplier);
+    this.drift.record(breakdown.beatPar, this.paidHintLevel, false);
+    this.pool.markUsed(t.id);
+
+    if (this.options.mode === 'relay') {
+      this.clock += this.options.relayBonusSeconds ?? 8;
+    }
+
+    this.events.onCapture?.({
+      target: t, breakdown, totalScore: this.score, index: this.targetIndex,
+    });
+
+    this.targetIndex++;
+    this.captureSlowdown = 1.25;
+    this.phase = 'captured';
+
+    if (this.options.mode === 'daily' && this.targetIndex >= (this.options.dailyLength ?? 10)) {
+      this.target = null;
+      this.finish();
+      return;
+    }
+    this.nextTarget();
+  }
+
+  // --- readouts for the HUD -------------------------------------------------
+
+  /** Free, always on: the game's quiet geography teacher. */
+  get locationName(): string {
+    return this.world.countryNameAt(this.snake.position);
+  }
+
+  get distanceToTargetKm(): number {
+    if (!this.target) return 0;
+    return angleBetween(this.snake.position, this.target.position) * EARTH_RADIUS_KM;
+  }
+
+  get bearingToTarget(): number {
+    if (!this.target) return 0;
+    return bearingDeg(this.snake.position, this.target.position);
+  }
+
+  /** Unit tangent from the head toward the target — drives the hint wedge. */
+  targetTangent(out = _dir): Vector3 {
+    if (!this.target) return out.set(0, 1, 0);
+    return tangentToward(this.snake.position, this.target.position, out);
+  }
+
+  /**
+   * Coarse near/medium/far band for hint level 1, as [minRad, maxRad] around
+   * the player. Deliberately wide — this hint narrows the search, it does not
+   * solve it.
+   */
+  distanceBand(): [number, number] {
+    const a = this.target ? angleBetween(this.snake.position, this.target.position) : 0;
+    if (a < 25 * DEG) return [0, 25 * DEG];
+    if (a < 60 * DEG) return [25 * DEG, 60 * DEG];
+    if (a < 110 * DEG) return [60 * DEG, 110 * DEG];
+    return [110 * DEG, Math.PI];
+  }
+
+  /** Hint level 2's search circle: 1,500 km around the truth. */
+  get searchRadiusRad(): number {
+    return 1500 / EARTH_RADIUS_KM;
+  }
+
+  get relayRemaining(): number {
+    return this.options.mode === 'relay' ? this.clock : 0;
+  }
+
+  get dailyTotal(): number {
+    return this.options.dailyLength ?? 10;
+  }
+
+  /** Country index the hint should highlight, or 0. */
+  get highlightCountry(): number {
+    if (!this.target || this.hintLevel < 2) return 0;
+    return this.target.captureCountry;
+  }
+
+  headPosition(): Vector3 {
+    return _tmp.copy(this.snake.position);
+  }
+}
+
+export function dailySeedFor(date = new Date()): number {
+  return todaySeed(date);
+}

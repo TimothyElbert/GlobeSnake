@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<path fill="currentColor" d="M20 44Q100 56 180 44L176 58Q100 68 24 58Z"/>
+<path fill="currentColor" d="M58 58H66L60 168H50Z"/>
+<path fill="currentColor" d="M134 58H142L150 168H140Z"/>
+<path fill="currentColor" d="M38 88H162V98H38Z"/>
+<path fill="currentColor" d="M95 66H105V88H95Z"/>
+<path fill="currentColor" d="M22 104H30V168H22Z"/>
+<path fill="currentColor" d="M20 100H32V104H20Z"/>
+<path fill="currentColor" d="M30 106H55V113H30Z"/>
+<path fill="currentColor" d="M170 104H178V168H170Z"/>
+<path fill="currentColor" d="M168 100H180V104H168Z"/>
+<path fill="currentColor" d="M145 106H170V113H145Z"/>
+<path fill="currentColor" d="M14 168Q19 164 24 168T34 168T44 168T54 168T64 168T74 168T84 168T94 168T104 168T114 168T124 168T134 168T144 168T154 168T164 168T174 168T184 168L184 176H14Z"/>
+</svg>

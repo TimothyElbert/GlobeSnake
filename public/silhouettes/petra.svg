@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<path fill="currentColor" d="M96 32Q100 20 104 32Z"/>
+<path fill="currentColor" d="M84 50L100 30L116 50Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M88 92V50H112V92ZM92 92V56h4V92ZM104 92V56h4V92Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M50 92V72L82 54V92ZM60 92V70h8V92Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M118 92V54L150 72V92ZM132 92V70h8V92Z"/>
+<path fill="currentColor" d="M46 96H154V108H46Z"/>
+<path fill="currentColor" fill-rule="evenodd" d="M48 172V108H152V172ZM58 172V118h8V172ZM74 172V118h8V172ZM91 172V112h18V172ZM118 172V118h8V172ZM134 172V118h8V172Z"/>
+<path fill="currentColor" d="M44 172H156V180H44Z"/>
+</svg>
