@@ -47,6 +47,7 @@ export class Hud {
   private readonly speedParts: HTMLElement;
   private readonly speedBar: HTMLElement;
 
+  private readonly wherePanel: HTMLElement;
   private readonly whereCountry: HTMLElement;
   private readonly whereSwatch: HTMLElement;
   private readonly whereClimate: HTMLElement;
@@ -165,7 +166,7 @@ export class Hud {
     this.whereCountry = el('div', { class: 'where-country', text: '—' });
     this.whereSwatch = el('span', { class: 'swatch' });
     this.whereClimate = el('span', { text: '' });
-    const bl = el('div', { class: 'hud-bl panel where' }, [
+    this.wherePanel = el('div', { class: 'hud-bl panel where' }, [
       el('div', { class: 'stat-label', text: 'You are in' }),
       this.whereCountry,
       el('div', { class: 'where-terrain' }, [this.whereSwatch, this.whereClimate]),
@@ -191,7 +192,7 @@ export class Hud {
     this.vignette = el('div', { class: 'danger-vignette' });
 
     this.root = el('div', { class: 'layer' }, [
-      topBar, tl, tr, bl, bc, this.minimapSlot, this.toastRail,
+      topBar, tl, tr, this.wherePanel, bc, this.minimapSlot, this.toastRail,
     ]);
     document.body.append(this.vignette);
   }
@@ -203,6 +204,17 @@ export class Hud {
   setVisible(v: boolean): void {
     this.root.style.display = v ? '' : 'none';
     this.vignette.style.display = v ? '' : 'none';
+  }
+
+  /**
+   * Terra Incognita hides this outright.
+   *
+   * "You are in: Kazakhstan" is the game's free geography teacher everywhere
+   * else — but in a world whose entire premise is that you do not know where
+   * you are until you have looked, it hands back the answer for nothing.
+   */
+  setLocationVisible(on: boolean): void {
+    this.wherePanel.hidden = !on;
   }
 
   setMuted(m: boolean): void {

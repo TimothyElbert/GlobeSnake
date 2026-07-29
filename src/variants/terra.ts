@@ -43,6 +43,7 @@ void bootstrap({
       'bearing, a distance, and your nerve. Take the Grand Tour if you want the line to stop lifting.',
     rules: [
       'You start on blank vellum. Coastlines only appear where you have travelled, so finding your bearings *is* the game.',
+      'Nothing tells you where you are — no country readout, and the inset globe is fogged like the world. Only your own map, as far as you have drawn it.',
       'Hints give bearing and range only. No search circle, no pin, no shortcut to the answer.',
       'How much of the planet you uncovered is recorded separately from your score — a big score in one corner is a different run from a small one that crossed an ocean.',
       'Grand Tour is the hard one: twenty places named up front, any order you like, and a line that never lifts.',
@@ -52,6 +53,7 @@ void bootstrap({
   maxHintLevel: 2,
   hintNames: ['Bearing & range', 'Tighter bearing'],
   trackExploration: true,
+  hideLocation: true,
 
   // Slower and more deliberate: this world is for thinking, and a permanent
   // trail punishes a wandering line far more than a vacating tail does.

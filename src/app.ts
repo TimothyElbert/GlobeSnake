@@ -58,6 +58,8 @@ export interface VariantConfig {
   starBrightness?: number;
   /** Terra Incognita: record how much of the globe the player uncovered. */
   trackExploration?: boolean;
+  /** Terra Incognita: no "You are in …" readout — knowing that is the puzzle. */
+  hideLocation?: boolean;
   /**
    * Vertical exaggeration used by everything that must sit on the ground.
    * Must match `globe.relief`, or the snake floats above the terrain (or sinks
@@ -171,6 +173,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   hud.mount();
   hud.setVisible(false);
   hud.setMuted(audio.muted);
+  hud.setLocationVisible(!config.hideLocation);
   hud.onHintClick(() => { void audio.ensureStarted(); takeHint(); });
 
   function toggleMute(): void {
@@ -483,6 +486,9 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
             // exact pin has been bought.
             s.target ? (s.hintLevel >= 3 ? s.target.position : s.hintLevel >= 2 ? s.searchCentre : null) : null,
             (fn) => s.ships.forEachAlive(fn),
+            // Fogged where the world is: otherwise the corner of the screen
+            // quietly displays the whole map the globe is busy hiding.
+            s.exploredMask,
           );
           audio.updateAmbience(
             s.snake.surface.terrain as Terrain,

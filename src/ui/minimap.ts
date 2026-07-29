@@ -19,6 +19,13 @@ import type { Snake } from '@core/snake';
 const SRC_W = 1024;
 const SRC_H = 512;
 
+/** A coarse "have I been here" grid, in the same equirectangular layout. */
+export interface ExploredMask {
+  data: Uint8Array;
+  cols: number;
+  rows: number;
+}
+
 const _p = new Vector3();
 const _up = new Vector3();
 const _right = new Vector3();
@@ -97,12 +104,14 @@ export class Minimap {
     snake: Snake,
     target: Vector3 | null,
     ships: ((fn: (p: Vector3) => void) => void) | null,
+    /** Terra Incognita: only draw ground the player has actually seen. */
+    mask: ExploredMask | null = null,
   ): void {
     this.sinceRaster += dt;
     // The raster only changes as the globe turns under you; 20 Hz is invisible.
     if (this.sinceRaster > 0.05) {
       this.sinceRaster = 0;
-      this.rasterize(centre);
+      this.rasterize(centre, mask);
     } else {
       this.ctx.putImageData(this.image, 0, 0);
     }
@@ -197,7 +206,7 @@ export class Minimap {
     ctx.fillText('N', cx, 11);
   }
 
-  private rasterize(centre: Vector3): void {
+  private rasterize(centre: Vector3, mask: ExploredMask | null): void {
     const s = this.size;
     const r = s / 2 - 2;
     const data = this.image.data;
@@ -234,6 +243,22 @@ export class Minimap {
 
         // A little limb shading so the disc reads as a sphere.
         const shade = 0.55 + 0.45 * nz;
+
+        if (mask) {
+          let mc = ((lon / (Math.PI * 2) + 0.5) * mask.cols) | 0;
+          let mr = ((0.5 - lat / Math.PI) * mask.rows) | 0;
+          mc = ((mc % mask.cols) + mask.cols) % mask.cols;
+          if (mr < 0) mr = 0; else if (mr >= mask.rows) mr = mask.rows - 1;
+          if (!mask.data[mr * mask.cols + mc]) {
+            // Unseen ground reads as the same blank vellum as the globe itself.
+            data[o] = 208 * shade;
+            data[o + 1] = 194 * shade;
+            data[o + 2] = 166 * shade;
+            data[o + 3] = 255;
+            continue;
+          }
+        }
+
         data[o] = this.atlas[a] * shade;
         data[o + 1] = this.atlas[a + 1] * shade;
         data[o + 2] = this.atlas[a + 2] * shade;

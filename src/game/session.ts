@@ -532,6 +532,19 @@ export class Session {
     return this.exploredTotal > 0 ? this.exploredWeight / this.exploredTotal : 0;
   }
 
+  /**
+   * The explored grid, for anything that must not draw unseen ground.
+   *
+   * The minimap is the reason this is exposed: it was painting the entire
+   * world's coastlines in the corner of the screen while the main globe kept
+   * them hidden, which gave away far more than the location readout ever did.
+   */
+  get exploredMask(): { data: Uint8Array; cols: number; rows: number } | null {
+    return this.explored
+      ? { data: this.explored, cols: EXPLORE_COLS, rows: EXPLORE_ROWS }
+      : null;
+  }
+
   private recordTrace(dt: number): void {
     // ~4 samples/second is plenty for a share-card polyline and keeps a
     // fifteen-minute run under 4,000 points.
