@@ -29,19 +29,22 @@ Every run ends with a shareable route card drawn from the biomes you crossed.
 
 Nothing to install. Open the site, pick a world, press Begin.
 
-You steer with the mouse. The snake chases your cursor, and how far ahead you reach is your
-throttle; hold the button to boost. That is the entire control scheme — there were once turn keys,
-a boost key and a brake as well, and all they achieved was a longer list to explain.
+Steer with the arrow keys or the mouse — both are always live, and whichever you used last has
+control. There is no brake; it was one binding too many.
 
 | | |
 |---|---|
-| **Mouse** | Steer toward the cursor · **hold** to boost |
+| <kbd>←</kbd> <kbd>→</kbd> | Turn |
+| <kbd>↑</kbd> | Boost (costs stamina) |
+| **Mouse** | Steer toward the cursor · reach further ahead, or **hold**, to boost |
 | <kbd>Space</kbd> | Hint (costs points from the current target) |
 | **Wheel** | Zoom |
 | <kbd>Esc</kbd> | Pause · <kbd>R</kbd> restart · <kbd>M</kbd> mute |
 
-The same scheme is what makes the game playable on a phone, rather than a keyboard game with an
-apology bolted on.
+Boost is not scheme-specific: <kbd>↑</kbd> works while you are aiming with the mouse, and holding
+the button works while you are turning with the keys. Cursor steering is also what makes the game
+playable on a phone, rather than a keyboard game with an apology bolted on. Mouse sensitivity is
+adjustable in the Controls tab; it does not affect the arrow keys, which always ask for a full turn.
 
 **You cannot get permanently stuck.** Hints are charged against the current target's value, never
 against points you have already banked, and if you are still lost at twice the par time the first

@@ -182,10 +182,10 @@ export class StartScreen {
 
     const controlsPanel = el('div', { class: 'tab-panel', hidden: true }, [
       el('p', { class: 'lede', text:
-        'Steer with the mouse — the snake chases your cursor, and how far ahead you reach is your throttle. ' +
-        'That is the whole control surface.' }),
+        'Steer either way, whenever you like — the arrow keys turn, or the snake chases your cursor. ' +
+        'Both are always live and the one you used last has control. Boost works from either.' }),
 
-      el('h2', { text: 'Steering sensitivity' }),
+      el('h2', { text: 'Mouse sensitivity' }),
       el('div', { class: 'slider-row' }, [
         el('span', { class: 'slider-end', text: 'Smooth' }),
         sensitivitySlider,
@@ -195,12 +195,15 @@ export class StartScreen {
       el('p', { class: 'lede', text:
         'How hard the snake chases the cursor. Low is calmer and easier to hold a line with; high ' +
         'snaps onto the cursor and makes threading a gap in your own body possible at speed. It ' +
-        'cannot turn tighter than the snake physically can, whatever you set.' }),
+        'cannot turn tighter than the snake physically can, whatever you set — and it does not ' +
+        'affect the arrow keys, which always ask for a full turn.' }),
 
       el('h2', { text: 'Keys' }),
       el('div', { class: 'keys' }, [
+        keyRow(['←', '→'], 'Turn'),
+        keyRow(['↑'], 'Boost (costs stamina)'),
         keyRow(['Mouse'], 'Steer toward the cursor'),
-        keyRow(['Hold'], 'Boost (costs stamina)'),
+        keyRow(['Hold'], 'Boost'),
         keyRow(['Space'], 'Hint — costs points from this target'),
         keyRow(['Wheel'], 'Zoom in and out'),
         keyRow(['Esc'], 'Pause'),

@@ -293,12 +293,10 @@ range-spine assertions (Andes, Himalaya, Alps, Rockies, Caucasus, Zagros, Atlas,
 Highlands, Southern Alps, Japanese Alps) and negative cases (Amazon, Sahara, Great Plains, Congo,
 East European Plain, central Tibet) now enforced by the bake's own verifier.
 
-**7. Controls cut to the mouse alone.** Turn keys, boost key and brake were all removed. Five ways
-to influence the snake meant a start card full of bindings that, in practice, nobody used more than
-one of — and two input schemes to keep in sync forever. Pursuit steering plus hold-to-boost is the
-whole surface, and it is also what makes the game work on a phone rather than being a keyboard game
-with an apology bolted on. The brake was deleted from the engine as well, not just unbound: dead
-code that implies a control is worse than no code.
+**7. Controls cut to the mouse alone, then ←/→/↑ restored — see Revision 13.** Five ways to
+influence the snake meant a start card full of bindings that, in practice, nobody used more than
+one of. The brake was the genuinely dead one and is gone from the engine, not merely unbound: dead
+code that implies a control is worse than no code. Turning and boosting came back.
 
 **8. A target's value now decays to exactly zero** over three times par, and is displayed counting
 down. §5 deliberately floored the multiplier at ×0.35 to avoid teaching players to quit a bad
@@ -328,6 +326,15 @@ of the globe you uncovered as a separate axis from score.
 **12. Grand Tour added** — twenty places named up front, any order, permanent trail, ranked on
 finishing time, with a study period before the clock starts. Its board replaces the single-target
 prompt entirely, because a prompt naming one of twenty simultaneously-live targets is noise.
+
+**13. Arrow keys are back, alongside the mouse.** Revision 7 cut them, and cutting the brake was
+right — but cutting *turning* threw out a scheme some people simply prefer, on the theory that one
+control surface is tidier than two. It is tidier and it is worse. Both schemes are live at all
+times and the device you used last has control: an arrow key takes it from the cursor, a deliberate
+mouse movement takes it back. Boost is deliberately not scheme-specific — ↑ works while you aim
+with the mouse, and holding the button works while you turn with the keys — because nobody should
+have to remember which half of the control scheme they are in to go faster. Mouse sensitivity does
+not apply to the keys, which always ask for a full-rate turn.
 
 ---
 

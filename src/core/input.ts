@@ -32,7 +32,14 @@ export class InputManager {
   /** Normalised 0..1 distance from the cursor to the head on screen. */
   private aimScreenDistance = 0.5;
 
-  scheme: InputScheme = 'keyboard';
+  /**
+   * Whichever device was used last wins, and both are always live.
+   *
+   * Starts on `pointer` because the mouse is the primary scheme and should work
+   * from the first frame without needing a nudge; an arrow key hands control
+   * over, and a deliberate mouse movement takes it back.
+   */
+  scheme: InputScheme = 'pointer';
   /** Set true by variants that want the pointer scheme from the first frame. */
   preferPointer = false;
 
@@ -98,6 +105,7 @@ export class InputManager {
     }
     if (e.repeat) return;
     this.keys.add(e.code);
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') this.scheme = 'keyboard';
 
     switch (e.code) {
       case 'Space': case 'KeyH': this.emit('hint'); break;
@@ -179,17 +187,30 @@ export class InputManager {
   /**
    * Produce this frame's steering command.
    *
-   * Mouse only, and no brake. The game had five ways to influence the snake —
-   * two turn keys, boost, brake, and the cursor — and in practice nobody used
-   * more than one of them; the extra bindings were something to explain on the
-   * start card rather than something to play with. Pursuit steering plus a
-   * hold-to-boost is the whole control surface now, which also means the
-   * keyboard and touch schemes stopped being two things to keep in sync.
+   * Two schemes, both always live, last-used wins: ←/→ to turn, or the cursor
+   * to chase. There is no brake in either — the earlier five-binding scheme
+   * (two turn keys, boost, brake, cursor) was mostly a longer list to explain,
+   * and the brake in particular went unused.
+   *
+   * Boost is deliberately *not* scheme-specific: ↑ works while you are steering
+   * with the mouse, and holding the button works while you are steering with
+   * the keys. Nobody should have to remember which half of the control scheme
+   * they are currently in to make the snake go faster.
    */
   sample(position: Vector3, heading: Vector3, globeRadius: number, turnRateRad: number): SteerInput {
     const o = this.out;
     o.turn = 0;
-    o.boost = false;
+    o.boost = this.keys.has('ArrowUp');
+
+    if (this.scheme === 'keyboard') {
+      const left = this.keys.has('ArrowLeft');
+      const right = this.keys.has('ArrowRight');
+      // Full deflection: the keys ask for everything the snake can turn, and
+      // the sensitivity setting is a mouse-aiming curve that has no meaning
+      // here. Releasing both simply goes straight.
+      if (left !== right) o.turn = left ? -1 : 1;
+      return o;
+    }
 
     if (!this.computeAim(position, globeRadius)) return o;
 
