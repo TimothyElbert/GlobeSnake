@@ -14,10 +14,14 @@ longer with every find.
 |---|---|
 | **Expedition** | The canonical game. NASA's Blue Marble, city lights on the night side, real elevation under every metre. |
 | **Tempest** | The same Earth with the atmosphere switched on. Jet streams, ocean gyres and hurricanes, all drawn on the globe before they reach you. |
-| **Terra Incognita** | A blank vellum globe and a pen for a snake. Travelling inks the world in behind you — and the line never fades, so the map you draw is the maze you must survive. |
+| **Terra Incognita** | A blank vellum globe and a pen for a snake. Nothing is drawn until you go there — not even the coastlines — so finding your bearings is the game. |
 
-Every world also has a **Daily Run**: ten targets, the same ten for everyone on Earth that day,
-ending in a shareable route card drawn from the biomes you crossed.
+Every world has four modes. **Expedition** runs until your own body catches you; **Relay** gives
+you two minutes and eight more seconds per find; **Daily Run** is ten targets, one at a time, the
+same ten for everyone playing that world today; and the **Grand Tour** names twenty places up
+front, lets you take them in any order, never lifts the line, and ranks you on how fast you
+finish. Dailies are seeded per world, so the three are three different puzzles on the same date.
+Every run ends with a shareable route card drawn from the biomes you crossed.
 
 ---
 

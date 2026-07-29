@@ -36,7 +36,7 @@ export class InputManager {
   /** Set true by variants that want the pointer scheme from the first frame. */
   preferPointer = false;
 
-  private readonly out: SteerInput = { turn: 0, boost: false, brake: false };
+  private readonly out: SteerInput = { turn: 0, boost: false };
 
   constructor(
     private readonly element: HTMLElement,
@@ -178,7 +178,6 @@ export class InputManager {
     const o = this.out;
     o.turn = 0;
     o.boost = false;
-    o.brake = false;
 
     if (!this.computeAim(position, globeRadius)) return o;
 

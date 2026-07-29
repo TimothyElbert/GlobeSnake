@@ -37,10 +37,10 @@ void bootstrap({
     tagline: 'Draw it yourself',
     short: 'A blank globe, a pen for a snake, and no coastlines until you have been there.',
     blurb:
-      'A globe of blank vellum, faintly embossed with coastlines, and a snake that is really a pen. ' +
-      'Everywhere you travel the world inks itself in behind you — washes, hachures, a darkening shore. ' +
-      'The line never dries and never fades: by the end of a long run the map you have drawn is also the ' +
-      'maze you have to survive. And there is no pin here. Only a bearing, a distance, and your nerve.',
+      'A globe of blank vellum and a snake that is really a pen. Nothing is drawn until you go there: ' +
+      'coastlines, washes and hachures appear only along the ground you have covered, so finding your ' +
+      'bearings is the game rather than a preliminary to it. There is no pin here either — only a ' +
+      'bearing, a distance, and your nerve. Take the Grand Tour if you want the line to stop lifting.',
     rules: [
       'You start on blank vellum. Coastlines only appear where you have travelled, so finding your bearings *is* the game.',
       'Hints give bearing and range only. No search circle, no pin, no shortcut to the answer.',

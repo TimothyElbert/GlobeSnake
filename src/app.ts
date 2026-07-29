@@ -544,10 +544,10 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
       },
       // Mirrors the real fixed-step callback, variant hook included — a harness
       // that skips onFixed would happily report that Tempest has no wind.
-      step(n: number, turn = 0, boost = false, brake = false) {
+      step(n: number, turn = 0, boost = false) {
         for (let i = 0; i < n; i++) {
           if (!session || !ctx) return;
-          session.update(1 / 120, { turn, boost, brake });
+          session.update(1 / 120, { turn, boost });
           config.onFixed?.(ctx, 1 / 120);
         }
       },

@@ -102,7 +102,12 @@ than snapped to the class. **Rivers are speed lanes** — follow the Nile.
 
 Relative steering, unanimous across the council: there is no consistent global "up" on S².
 
-**Keyboard** — ←/→ continuous turn (tap = ~10° nudge) · ↑ boost to 135% (stamina-limited,
+**Superseded — see Revision 7.** The shipped scheme is mouse-only: pursuit steering, hold to
+boost, `Space` for a hint, wheel to zoom, `Esc`/`M`/`R`. The original keyboard scheme is recorded
+below because the reasoning about relative steering still holds and is what pursuit steering is
+built on.
+
+**Keyboard (removed)** — ←/→ continuous turn (tap = ~10° nudge) · ↑ boost to 135% (stamina-limited,
 widens turn radius 20%) · ↓ brake to 70% (tightens radius 15%) · **Space = hint**
 (Sol is right: the core action does not get buried on `H`; `H` is kept as an alias) ·
 wheel/PgUp-PgDn zoom · `M` mute · `Esc` pause.
@@ -242,6 +247,10 @@ Build order: Expedition to done → Tempest → Terra Incognita.
 
 ## Revisions made during the build
 
+> This section is the authority wherever it contradicts anything above. The earlier sections are
+> kept as written so the reasoning that produced them is still legible, including where that
+> reasoning turned out to be wrong.
+
 Recorded because each of these overturned something asserted above, and the reasoning
 matters more than the conclusion.
 
@@ -283,6 +292,42 @@ was nothing to route around and §3's central promise was decorative. Retuned to
 range-spine assertions (Andes, Himalaya, Alps, Rockies, Caucasus, Zagros, Atlas, Ethiopian
 Highlands, Southern Alps, Japanese Alps) and negative cases (Amazon, Sahara, Great Plains, Congo,
 East European Plain, central Tibet) now enforced by the bake's own verifier.
+
+**7. Controls cut to the mouse alone.** Turn keys, boost key and brake were all removed. Five ways
+to influence the snake meant a start card full of bindings that, in practice, nobody used more than
+one of — and two input schemes to keep in sync forever. Pursuit steering plus hold-to-boost is the
+whole surface, and it is also what makes the game work on a phone rather than being a keyboard game
+with an apology bolted on. The brake was deleted from the engine as well, not just unbound: dead
+code that implies a control is worse than no code.
+
+**8. A target's value now decays to exactly zero** over three times par, and is displayed counting
+down. §5 deliberately floored the multiplier at ×0.35 to avoid teaching players to quit a bad
+round — but that reasoning does not survive contact with a game where you *cannot* skip a target.
+The clock takes the points; finding the place is still the only way forward. A countdown that
+quietly stops counting is a countdown that lies.
+
+**9. Hints no longer point at the answer.** The level-1 cone was drawn along the true bearing,
+which put the target on its centreline and turned "somewhere over there" into an arrow; the level-2
+circle was centred on the target, i.e. a bullseye smaller than most countries; and level 2 also lit
+the entire country, which for a country target *was* the answer and made the middle rung strictly
+better value than the top one. The cone is now swung 12–29° off true (offset drawn once per target,
+biased away from zero — uniform jitter lands near-centred often enough to teach the centreline),
+the circle sits 640–1065 km off the target inside its own 1500 km radius, and country highlighting
+moved to level 3.
+
+**10. Ships pay in boost, not points.** As a score bonus they competed with the objective and made
+the records table ambiguous — was that a good run, or a lucky shipping lane?
+
+**11. Terra Incognita swapped its permanent trail for real fog of war.** §7 gave it an indelible
+line and explicitly kept coastlines visible. Playing it, the line was mostly an ambush, while the
+always-visible map meant "explore to find your bearings" was never actually asked for. The
+permanent line moved to the Grand Tour, where knowing the whole list up front makes it a planning
+problem instead; Terra hides coastlines until you have travelled there, and records what fraction
+of the globe you uncovered as a separate axis from score.
+
+**12. Grand Tour added** — twenty places named up front, any order, permanent trail, ranked on
+finishing time, with a study period before the clock starts. Its board replaces the single-target
+prompt entirely, because a prompt naming one of twenty simultaneously-live targets is noise.
 
 ---
 

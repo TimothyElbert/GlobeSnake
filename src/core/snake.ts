@@ -34,7 +34,6 @@ export interface SnakeConfig {
   growthPerCaptureDeg: number;
   maxBodyDeg: number;
   boostMultiplier: number;
-  brakeMultiplier: number;
   /** Seconds of continuous boost available from full. */
   boostCapacity: number;
   boostRecoveryPerSec: number;
@@ -70,7 +69,6 @@ export const DEFAULT_SNAKE_CONFIG: SnakeConfig = {
   growthPerCaptureDeg: 10,
   maxBodyDeg: 320,
   boostMultiplier: 1.35,
-  brakeMultiplier: 0.7,
   boostCapacity: 3.2,
   boostRecoveryPerSec: 0.42,
   trailMode: 'growing',
@@ -81,7 +79,6 @@ export interface SteerInput {
   /** -1 hard left … +1 hard right. */
   turn: number;
   boost: boolean;
-  brake: boolean;
 }
 
 export interface WakeState {
@@ -310,18 +307,15 @@ export class Snake {
       boosting = true;
       speedMul *= this.cfg.boostMultiplier;
       this.boostStamina = Math.max(0, this.boostStamina - dt * (TERRAIN_STAMINA_DRAIN[terrain] ?? 1));
-    } else if (input.brake) {
-      speedMul *= this.cfg.brakeMultiplier;
     }
     if (!boosting) {
       this.boostStamina = Math.min(this.cfg.boostCapacity, this.boostStamina + dt * this.cfg.boostRecoveryPerSec);
     }
 
-    // Boost widens the turning circle and braking tightens it, so speed is a
-    // real trade rather than a free win.
-    let turnScale = 1;
-    if (boosting) turnScale = 0.8;
-    else if (input.brake) turnScale = 1.15;
+    // Boost widens the turning circle, so speed is a real trade rather than a
+    // free win. (There was once a brake that tightened it; it went with the
+    // keyboard, and nothing left can set it.)
+    const turnScale = boosting ? 0.8 : 1;
 
     if (this.wake.active) speedMul *= 1.3;
 

@@ -24,7 +24,7 @@ void bootstrap({
     rules: [
       'Terrain changes your speed. Crossing the Andes is slower than going round them — sometimes.',
       'Draft your own body at close range for a speed surge, and a bright line down your spine.',
-      'Swallow a cargo ship for a bonus. It will never be worth more than finding the place.',
+      'Swallow a cargo ship to refill your boost. It pays in fuel, never in points.',
       'Stuck for twice the par time? The first hint arrives on its own, and it costs nothing.',
     ],
   },

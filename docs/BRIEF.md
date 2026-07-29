@@ -1,5 +1,10 @@
 # GLOBE SNAKE — Design Council Brief
 
+> **Historical document.** This is the brief that went to the design council before any code
+> existed, preserved exactly as it was sent. Several proposals in it were argued down or overturned
+> during the build — keyboard controls, ships paying in points, a permanent trail in Terra. For
+> what the game actually does, read [DESIGN.md](DESIGN.md), and its Revisions section in particular.
+
 ## The ask (verbatim intent from the user)
 
 Build a complete, hostable-on-GitHub-Pages game. Premise: classic Snake (eat dots, grow,
