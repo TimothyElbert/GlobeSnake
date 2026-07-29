@@ -136,9 +136,17 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   // it. A snake that looks fatter than it kills — or thinner — is the kind of
   // unfairness players correctly never forgive.
   const collisionRadiusDeg = config.snake?.collisionRadiusDeg ?? DEFAULT_SNAKE_CONFIG.collisionRadiusDeg;
+  // The ribbon's vertex budget is derived from the trail's capacity, never
+  // guessed. The Grand Tour keeps a permanent trail in *every* world, so a
+  // default budget smaller than the trail meant the oldest stretch silently
+  // stopped being drawn while remaining perfectly lethal — the visible tail
+  // appeared to crawl forwards, and you could be killed by a wall that was not
+  // on screen. Only Terra happened to have matching numbers.
+  const trailCapacity = config.snake?.capacity ?? DEFAULT_SNAKE_CONFIG.capacity;
   const ribbon = new SnakeRibbon({
     width: collisionRadiusDeg * (Math.PI / 180),
     relief: config.relief ?? RELIEF_SCALE,
+    maxNodes: trailCapacity,
     ...config.ribbon,
   });
   const head = new SnakeHead();

@@ -84,9 +84,11 @@ void bootstrap({
     scalePitch: 1400,
     maxNodes: 40000,
     // The last ~12° of arc is the pen; everything older has dried into map.
+    // Full width throughout — the drawn line and the lethal line are the same
+    // line, and narrowing the old part was quietly killing people in gaps that
+    // looked clear.
     dryAfterNodes: 100,
     dryFadeNodes: 70,
-    dryWidth: 0.5,
     dryColor: 0x5a3d22,
   },
   starBrightness: 0.35,

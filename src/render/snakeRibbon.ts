@@ -111,7 +111,6 @@ const _tan = new Vector3();
 const _bin = new Vector3();
 const _col = new Color();
 const _colB = new Color();
-const _dryInk = new Color(0x5a3d22);
 
 export interface RibbonOptions {
   /** Half-width of the body, in globe radii. */
@@ -142,7 +141,16 @@ export interface RibbonOptions {
    */
   dryAfterNodes?: number;
   dryFadeNodes?: number;
+  /**
+   * Width multiplier for the dried stretch. **Leave this at 1.**
+   *
+   * It was 0.5, which drew the old trail at half the width it kills at — the
+   * same defect as not drawing it at all, just quieter: you clear what looks
+   * like a gap and die anyway. Age is communicated by colour, which costs
+   * nothing and cannot lie about the hitbox.
+   */
   dryWidth?: number;
+  /** Colour the dried stretch tends toward. Omit to keep the biome colours. */
   dryColor?: number;
   /**
    * Vertical exaggeration, which **must** match the globe's.
@@ -173,19 +181,23 @@ export class SnakeRibbon {
   private readonly configuredDryAfter: number;
   private readonly dryFade: number;
   private readonly dryWidth: number;
+  private readonly dryTint: Color | null;
   /** Window currently resident in the vertex buffer. */
   private builtFirst = -1;
   private builtLast = -1;
+  private warnedClipping = false;
 
   constructor(opts: RibbonOptions = {}) {
     this.width = opts.width ?? 0.0135;
     this.lift = opts.lift ?? 0.0035;
     this.maxNodes = opts.maxNodes ?? DEFAULT_MAX_NODES;
     this.relief = opts.relief ?? RELIEF_SCALE;
-    this.configuredDryAfter = opts.dryAfterNodes ?? 0;
-    this.dryFade = Math.max(1, opts.dryFadeNodes ?? 90);
-    this.dryWidth = opts.dryWidth ?? 0.45;
-    _dryInk.setHex(opts.dryColor ?? 0x5a3d22);
+    // Every world gets the treatment on a permanent trail, not just Terra —
+    // the Grand Tour runs everywhere.
+    this.configuredDryAfter = opts.dryAfterNodes ?? 130;
+    this.dryFade = Math.max(1, opts.dryFadeNodes ?? 80);
+    this.dryWidth = opts.dryWidth ?? 1;
+    this.dryTint = opts.dryColor === undefined ? null : new Color(opts.dryColor);
     const MAX_RIBBON_NODES = this.maxNodes;
 
     const verts = MAX_RIBBON_NODES * 2;
@@ -289,7 +301,10 @@ export class SnakeRibbon {
       _col.setHex(climateColor(snake.climateAtNode(i)));
       _colB.setHex(climateColor(snake.climateAtNode(i > first ? i - 1 : i)));
       _col.lerp(_colB, 0.5);
-      if (dry > 0) _col.lerp(_dryInk, dry * 0.88);
+      if (dry > 0 && this.dryTint) _col.lerp(this.dryTint, dry * 0.88);
+      // Age also just darkens, in every world, so a permanent trail reads as
+      // "map I have drawn" rather than "one impossibly long animal".
+      else if (dry > 0) _col.multiplyScalar(1 - dry * 0.45);
 
       const v0 = k * 2, v1 = v0 + 1;
       const o0 = v0 * 3, o1 = v1 * 3;
@@ -331,6 +346,19 @@ export class SnakeRibbon {
 
   update(snake: Snake, sunDir: Vector3, time: number): void {
     const first = Math.max(snake.firstBodyNode, snake.nodeCount - this.maxNodes);
+
+    // Anything lethal that we decline to draw is an invisible wall, which is
+    // the single most unfair thing this game can do. Shout about it rather than
+    // letting it ship again.
+    if (import.meta.env.DEV && first > snake.firstBodyNode && !this.warnedClipping) {
+      this.warnedClipping = true;
+      console.error(
+        `[SnakeRibbon] budget of ${this.maxNodes} nodes cannot draw the whole lethal trail ` +
+        `(${snake.nodeCount - snake.firstBodyNode} nodes). The oldest stretch is invisible and ` +
+        'still kills. Raise maxNodes to the snake\'s capacity.',
+      );
+    }
+
     const last = snake.nodeCount - 1;
     const n = last - first + 1;
     if (n < 3) {
