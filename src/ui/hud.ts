@@ -103,22 +103,35 @@ export class Hud {
       el('div', { class: 'par-track' }, [this.parFill]),
     ]);
 
-    // --- score, speed and the hint, in one row along the top ----------------
-    // These three all have to survive the Grand Tour, which replaces the
-    // centre prompt entirely — so none of them can live inside it.
-    this.scoreValue = el('div', { class: 'score-value', text: '0' });
-    this.scoreSub = el('div', { class: 'stat-sub', text: 'no streak' });
-    const tl = el('div', { class: 'hud-topleft' }, [
-      el('div', { class: 'panel score-panel' }, [
-        el('div', { class: 'stat-label', text: 'Score' }),
-        this.scoreValue,
-        this.scoreSub,
-      ]),
+    // --- the top bar --------------------------------------------------------
+    //
+    // Speed and the hint sit in a column immediately beside whatever is in the
+    // centre — the prompt, or the Grand Tour board. They cannot live *inside*
+    // the prompt, because the Tour replaces it; but pushed out to a corner they
+    // are simply not where anyone is looking. A matching spacer on the far side
+    // keeps the centre panel actually centred.
+    // Built after the tour panel so the centre stack can reference both.
+    const sidePanel = el('div', { class: 'hud-side' }, [
       speedPanel,
       el('div', { class: 'panel hint-panel' }, [
         el('div', { class: 'stat-label', text: 'Hint' }),
         this.hintChip,
       ]),
+    ]);
+    // The tour board joins this stack further down, once it has been built.
+    const centre = el('div', { class: 'hud-centre' }, [this.promptPanel]);
+    const topBar = el('div', { class: 'hud-top' }, [
+      el('div', { class: 'hud-spacer' }),
+      centre,
+      sidePanel,
+    ]);
+
+    this.scoreValue = el('div', { class: 'score-value', text: '0' });
+    this.scoreSub = el('div', { class: 'stat-sub', text: 'no streak' });
+    const tl = el('div', { class: 'hud-tl panel' }, [
+      el('div', { class: 'stat-label', text: 'Score' }),
+      this.scoreValue,
+      this.scoreSub,
     ]);
 
     this.modeLabel = el('div', { class: 'stat-label', text: 'Elapsed' });
@@ -144,6 +157,7 @@ export class Hud {
       this.tourList,
       this.tourReady,
     ]);
+    centre.append(this.tourPanel);
 
     this.whereCountry = el('div', { class: 'where-country', text: '—' });
     this.whereSwatch = el('span', { class: 'swatch' });
@@ -174,7 +188,7 @@ export class Hud {
     this.vignette = el('div', { class: 'danger-vignette' });
 
     this.root = el('div', { class: 'layer' }, [
-      this.promptPanel, tl, tr, bl, bc, this.tourPanel, this.minimapSlot, this.toastRail,
+      topBar, tl, tr, bl, bc, this.minimapSlot, this.toastRail,
     ]);
     document.body.append(this.vignette);
   }
@@ -282,7 +296,11 @@ export class Hud {
   private updateTour(session: Session): void {
     const all = session.tourAll;
     if (all.length === 0) return;
-    const nearestId = session.target?.id ?? '';
+    // Which of the twenty is closest is itself a hint, and a strong one — it
+    // narrows the search before you have moved. So the tile is only marked once
+    // a hint has actually been bought, and then it is there to tell you *which*
+    // place the bearing belongs to, which the hint would be useless without.
+    const nearestId = session.hintLevel > 0 ? session.target?.id ?? '' : '';
     const signature = `${nearestId}|${all.map((t) => (session.isTourFound(t.id) ? '1' : '0')).join('')}`;
     if (signature === this.lastTourSignature) return;
     this.lastTourSignature = signature;

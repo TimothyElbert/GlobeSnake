@@ -1,5 +1,7 @@
 import { Vector3 } from 'three';
-import { DEG, EARTH_RADIUS_KM, angleBetween, bearingDeg, fromLatLon, tangentToward } from '@core/sphere';
+import {
+  DEG, EARTH_RADIUS_KM, angleBetween, anyTangent, bearingDeg, fromLatLon, step, tangentToward, turn,
+} from '@core/sphere';
 import { Snake, type SnakeConfig, type SteerInput } from '@core/snake';
 import {
   SEA_LEVEL_CODE, TERRAIN_NAME, TERRAIN_SPEED, Terrain, WorldData, elevationMetres, isWater,
@@ -84,6 +86,11 @@ export interface RunLogEntry {
 
 const _tmp = new Vector3();
 const _dir = new Vector3();
+const _jitter = new Vector3();
+const _jitterDir = new Vector3();
+
+/** Half-angle of the level-1 bearing wedge. */
+export const WEDGE_HALF_ANGLE = Math.PI / 4;
 
 /** Exploration grid: 1.4° cells, and how far the snake "sees" as it travels. */
 const EXPLORE_CELL = 1.40625;
@@ -121,6 +128,8 @@ export class Session {
   private readonly dailyPlan: LiveTarget[] = [];
   private readonly tourList: LiveTarget[] = [];
   private readonly tourFound = new Set<string>();
+  private hintBearingOffset = 0;
+  private readonly hintRingCentre = new Vector3(1, 0, 0);
   private readonly explored: Uint8Array | null;
   private exploredWeight = 0;
   private readonly exploredTotal: number;
@@ -346,6 +355,7 @@ export class Session {
       this.targetElapsed = 0;
       this.paidHintLevel = 0;
       this.autoHintShown = false;
+      this.rollHintJitter(t);
       this.parSeconds = this.routes.routeCostDeg(this.snake.position, t.position)
         / this.snake.cfg.baseSpeedDeg + RECOGNITION_GRACE;
       this.events.onTarget?.(t, this.targetIndex, this.tourList.length);
@@ -360,6 +370,7 @@ export class Session {
     this.targetElapsed = 0;
     this.paidHintLevel = 0;
     this.autoHintShown = false;
+    this.rollHintJitter(t);
 
     // Par is the terrain-aware best route, not the straight line: 2,000 km over
     // the Himalayas is not the same problem as 2,000 km over the steppe, and
@@ -646,10 +657,47 @@ export class Session {
     return bearingDeg(this.snake.position, this.target.position);
   }
 
-  /** Unit tangent from the head toward the target — drives the hint wedge. */
+  /**
+   * Bearing for the hint wedge — deliberately *not* the true bearing.
+   *
+   * A 90° cone drawn straight at the answer puts the answer on its centreline,
+   * so the wedge stops being "somewhere over there" and becomes an arrow. The
+   * cone is swung by a fixed offset drawn once per target, so the target is
+   * reliably inside it but never at its middle. Fixed rather than per-frame,
+   * because a wedge that wobbled would average out to the truth in seconds.
+   */
   targetTangent(out = _dir): Vector3 {
     if (!this.target) return out.set(0, 1, 0);
-    return tangentToward(this.snake.position, this.target.position, out);
+    tangentToward(this.snake.position, this.target.position, out);
+    turn(this.snake.position, out, this.hintBearingOffset);
+    return out;
+  }
+
+  /**
+   * Centre of the level-2 search circle — offset from the target for the same
+   * reason. A circle centred on the answer is a bullseye, and at 1,500 km it
+   * was a smaller bullseye than most countries.
+   */
+  get searchCentre(): Vector3 {
+    return this.target ? this.hintRingCentre : this.snake.position;
+  }
+
+  /** Draw this target's hint offsets. Called once, when the target is set. */
+  private rollHintJitter(t: LiveTarget): void {
+    // Magnitude is drawn away from zero, not uniformly across it. A uniform
+    // offset still lands near-centred a good fraction of the time, and one
+    // near-centred cone teaches the player to read the centreline as the
+    // answer — which then makes every *later* cone more useful than intended.
+    const sign = this.rng() < 0.5 ? -1 : 1;
+    this.hintBearingOffset = sign * (0.4 + this.rng() * 0.55) * WEDGE_HALF_ANGLE * 0.68;
+
+    _jitter.copy(t.position);
+    anyTangent(_jitter, _jitterDir);
+    turn(_jitter, _jitterDir, this.rng() * Math.PI * 2);
+    // Far enough off-centre to matter, close enough that the target stays
+    // comfortably inside the drawn circle.
+    step(_jitter, _jitterDir, this.searchRadiusRad * (0.42 + this.rng() * 0.3));
+    this.hintRingCentre.copy(_jitter).normalize();
   }
 
   /**
@@ -678,9 +726,15 @@ export class Session {
     return this.options.dailyLength ?? 10;
   }
 
-  /** Country index the hint should highlight, or 0. */
+  /**
+   * Country index the hint should highlight, or 0.
+   *
+   * Level 3 only. Lighting up the whole country at level 2 *was* the answer for
+   * a country target, which made the middle rung of the ladder strictly better
+   * value than the top one.
+   */
   get highlightCountry(): number {
-    if (!this.target || this.hintLevel < 2) return 0;
+    if (!this.target || this.hintLevel < 3) return 0;
     return this.target.captureCountry;
   }
 

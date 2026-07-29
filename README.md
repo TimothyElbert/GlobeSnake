@@ -25,21 +25,25 @@ ending in a shareable route card drawn from the biomes you crossed.
 
 Nothing to install. Open the site, pick a world, press Begin.
 
-| Key | |
+You steer with the mouse. The snake chases your cursor, and how far ahead you reach is your
+throttle; hold the button to boost. That is the entire control scheme — there were once turn keys,
+a boost key and a brake as well, and all they achieved was a longer list to explain.
+
+| | |
 |---|---|
-| <kbd>←</kbd> <kbd>→</kbd> | Turn |
-| <kbd>↑</kbd> | Boost — costs stamina, widens your turning circle |
-| <kbd>↓</kbd> | Brake — turns tighter |
-| <kbd>Space</kbd> | Hint (costs points) |
+| **Mouse** | Steer toward the cursor · **hold** to boost |
+| <kbd>Space</kbd> | Hint (costs points from the current target) |
+| **Wheel** | Zoom |
 | <kbd>Esc</kbd> | Pause · <kbd>R</kbd> restart · <kbd>M</kbd> mute |
 
-Or use the mouse: the snake steers toward your cursor, and how far the cursor sits from the head
-is your throttle. That is not a degraded fallback — it is the better scheme on a trackpad, and it
-is what makes the game playable on a phone.
+The same scheme is what makes the game playable on a phone, rather than a keyboard game with an
+apology bolted on.
 
 **You cannot get permanently stuck.** Hints are charged against the current target's value, never
 against points you have already banked, and if you are still lost at twice the par time the first
-hint arrives on its own and costs nothing.
+hint arrives on its own and costs nothing. Hints deliberately point at a *region* — the bearing
+cone is swung off the true heading and the search circle is centred away from the answer, so they
+narrow the search without solving it.
 
 ---
 

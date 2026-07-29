@@ -9,7 +9,7 @@ import { Globe, type GlobeOptions } from '@render/globe';
 import { SnakeRibbon, type RibbonOptions } from '@render/snakeRibbon';
 import { ChaseCamera } from '@render/chaseCamera';
 import { SnakeHead, Starfield, TargetPin } from '@render/props';
-import { Session, type GameMode } from '@game/session';
+import { Session, WEDGE_HALF_ANGLE, type GameMode } from '@game/session';
 import { dayKey, submit as submitRecord } from '@game/records';
 import type { Deck, TargetRecord } from '@game/targets';
 import { Hud } from '@ui/hud';
@@ -402,21 +402,23 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
 
     if (level >= 1) {
       // Recomputed every frame: the wedge is cast from where you are *now*, so
-      // it stays useful as you move rather than becoming a stale arrow.
+      // it stays useful as you move rather than becoming a stale arrow. The
+      // bearing it uses is deliberately offset — see Session.targetTangent.
       s.targetTangent(_tan);
-      globe.setWedge(s.snake.position, _tan, Math.PI / 4, 1);
+      globe.setWedge(s.snake.position, _tan, WEDGE_HALF_ANGLE, 1);
       const [lo, hi] = s.distanceBand();
       globe.setBand(s.snake.position, lo, hi, 1);
     }
     if (level >= 2) {
-      globe.setRing(s.target.position, s.searchRadiusRad, 1);
-      const country = s.highlightCountry;
-      if (country > 0) globe.highlightCountry(country, 1);
+      // Offset centre: a circle drawn around the answer is a bullseye.
+      globe.setRing(s.searchCentre, s.searchRadiusRad, 1);
     }
     if (level >= 3) {
       pin.setPosition(s.target.position, world.reliefAt(s.target.position) * reliefScale + 0.004);
       pin.setColor(0xffc94a);
       pin.setOpacity(1);
+      const country = s.highlightCountry;
+      if (country > 0) globe.highlightCountry(country, 1);
     }
   }
 
@@ -467,7 +469,9 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
           hud.update(s);
           minimap.update(
             frameDt, s.snake.position, s.snake.heading, s.snake,
-            s.hintLevel >= 2 && s.target ? s.target.position : null,
+            // The minimap shows the *search area*, not the answer, until the
+            // exact pin has been bought.
+            s.target ? (s.hintLevel >= 3 ? s.target.position : s.hintLevel >= 2 ? s.searchCentre : null) : null,
             (fn) => s.ships.forEachAlive(fn),
           );
           audio.updateAmbience(
