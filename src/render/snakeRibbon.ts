@@ -144,6 +144,15 @@ export interface RibbonOptions {
   dryFadeNodes?: number;
   dryWidth?: number;
   dryColor?: number;
+  /**
+   * Vertical exaggeration, which **must** match the globe's.
+   *
+   * This was reading the global default while Terra Incognita ran a flat globe,
+   * so the body climbed mountains that were not being drawn — the snake looked
+   * like it was glitching over invisible terrain. Anything that sits on the
+   * ground has to be told the same number.
+   */
+  relief?: number;
 }
 
 export class SnakeRibbon {
@@ -158,6 +167,7 @@ export class SnakeRibbon {
   private readonly width: number;
   private readonly lift: number;
   private readonly maxNodes: number;
+  private readonly relief: number;
   /** 0 disables drying. Mutable because only some modes keep a permanent trail. */
   private dryAfter = 0;
   private readonly configuredDryAfter: number;
@@ -171,6 +181,7 @@ export class SnakeRibbon {
     this.width = opts.width ?? 0.0135;
     this.lift = opts.lift ?? 0.0035;
     this.maxNodes = opts.maxNodes ?? DEFAULT_MAX_NODES;
+    this.relief = opts.relief ?? RELIEF_SCALE;
     this.configuredDryAfter = opts.dryAfterNodes ?? 0;
     this.dryFade = Math.max(1, opts.dryFadeNodes ?? 90);
     this.dryWidth = opts.dryWidth ?? 0.45;
@@ -246,7 +257,7 @@ export class SnakeRibbon {
       // so the body climbs the Andes and drops into the Amazon exactly as the
       // displaced globe does — which is the only way the speed penalty for
       // mountains is legible before you are already crawling.
-      const r = 1 + snake.reliefAtNode(i) * RELIEF_SCALE + this.lift;
+      const r = 1 + snake.reliefAtNode(i) * this.relief + this.lift;
       const k = i - first;
       snake.nodeAt(i, _p);
       snake.nodeAt(i > first ? i - 1 : i, _prev);

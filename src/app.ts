@@ -138,6 +138,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   const collisionRadiusDeg = config.snake?.collisionRadiusDeg ?? DEFAULT_SNAKE_CONFIG.collisionRadiusDeg;
   const ribbon = new SnakeRibbon({
     width: collisionRadiusDeg * (Math.PI / 180),
+    relief: config.relief ?? RELIEF_SCALE,
     ...config.ribbon,
   });
   const head = new SnakeHead();

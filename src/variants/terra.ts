@@ -70,11 +70,13 @@ void bootstrap({
     atmosphere: 0.42,
     atmosphereColor: 0xc9a97a,
     segments: [256, 128],
-    // A flat globe. Relief shading on unrevealed vellum would show you where
-    // the mountains are before you had been there, which is precisely what this
-    // world is not supposed to tell you. Terrain is conveyed by hachures, and
-    // only where the map has been drawn.
+    // A flat globe, *and* a flat shading normal. Zeroing the displacement alone
+    // was not enough: the vertex shader still bent the normal by the height
+    // gradient, so blank vellum was hill-shaded and every continent showed
+    // through the fog as a relief map. Both have to go, or this world quietly
+    // hands you the thing it is meant to make you go and find.
     relief: 0,
+    reliefNormal: 0,
   },
   relief: 0,
   ribbon: {

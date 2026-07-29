@@ -202,8 +202,9 @@ export class StartScreen {
     const creditsPanel = el('div', { class: 'tab-panel', hidden: true }, [
       el('p', { class: 'lede', html:
         'Every asset here is public domain or permissively licensed, baked in at build time. ' +
-        'Once the page has loaded, the game makes no network requests at all — there is no backend, ' +
-        'no account and no tracking, and your records live only in this browser.' }),
+        'Once this page has loaded it makes no network requests at all — there is no backend, ' +
+        'no account and nothing counting you, and your records live only in this browser. ' +
+        '(The landing page may count anonymous visits; this one does not.)' }),
       el('ul', { class: 'lede' }, [
         el('li', { html: 'Imagery and elevation — NASA Visible Earth: Blue&nbsp;Marble, Earth at Night, GEBCO_08. Public domain.' }),
         el('li', { html: 'Coastlines, borders, rivers, lakes, glaciers — Natural&nbsp;Earth. Public domain.' }),
