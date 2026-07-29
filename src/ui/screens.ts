@@ -110,7 +110,7 @@ export class StartScreen {
     this.music = music;
     this.bestLine = el('div', { class: 'stat-sub' });
 
-    const modeGrid = el('div', { class: 'choices cols-3' });
+    const modeGrid = el('div', { class: 'choices cols-2' });
     for (const m of ['endless', 'daily', 'relay', 'tour'] as GameMode[]) {
       const info = MODE_INFO[m];
       const btn = el('button', {

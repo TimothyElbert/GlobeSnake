@@ -273,10 +273,14 @@ const FRAG = /* glsl */ `
       // leak that also made the globe look like the Moon. It is plain noise now
       // and unrevealed vellum tells you nothing.
       float grain = sin(vUv.x * 2200.0) * 0.5 + sin(vUv.y * 1500.0) * 0.5;
-      float blotch = fract(sin(dot(floor(vUv * 90.0), vec2(12.9898, 78.233))) * 43758.5453);
+      // Smooth, not hashed. A per-cell hash quantised the ageing into a visible
+      // checkerboard across the whole globe; interfering sines give the same
+      // uneven-batch feel with no grid in it.
+      float blotch = sin(vUv.x * 37.0) * sin(vUv.y * 53.0)
+                   + 0.5 * sin(vUv.x * 91.0 + 1.7) * sin(vUv.y * 71.0 - 0.9);
       vec3 paper = vec3(0.898, 0.835, 0.706)
                  * (1.0 + grain * 0.012)
-                 * (0.975 + blotch * 0.05);
+                 * (1.0 + blotch * 0.018);
       // Age the edges of the visible disc, like a globe gore that has been handled.
       paper *= 1.0 - pow(1.0 - max(dot(n, viewDir), 0.0), 3.0) * 0.22;
 

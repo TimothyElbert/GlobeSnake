@@ -26,6 +26,7 @@ export interface HudOptions {
 
 export class Hud {
   readonly root: HTMLElement;
+  private readonly promptPanel: HTMLElement;
   private readonly promptKicker: HTMLElement;
   private readonly promptName: HTMLElement;
   private readonly promptImageSlot: HTMLElement;
@@ -55,6 +56,7 @@ export class Hud {
   private readonly vignette: HTMLElement;
   private readonly tourPanel: HTMLElement;
   private readonly tourList: HTMLElement;
+  private readonly tourReady: HTMLElement;
   private readonly muteButton: HTMLButtonElement;
   readonly minimapSlot: HTMLElement;
 
@@ -84,7 +86,7 @@ export class Hud {
     this.speedTerrain = el('div', { class: 'speed-terrain', text: '—' });
     this.speedParts = el('div', { class: 'speed-parts', text: '' });
     this.speedBar = el('i');
-    const speedPanel = el('div', { class: 'hud-speed panel' }, [
+    const speedPanel = el('div', { class: 'speed-panel panel' }, [
       el('div', { class: 'stat-label', text: 'Going' }),
       el('div', { class: 'speed-head' }, [this.speedValue]),
       this.speedTerrain,
@@ -92,24 +94,31 @@ export class Hud {
       this.speedParts,
     ]);
 
-    const prompt = el('div', { class: 'prompt panel' }, [
+    this.promptPanel = el('div', { class: 'prompt panel' }, [
       this.promptKicker,
       this.promptImageSlot,
       this.promptName,
       this.promptWorth,
       this.promptMeta,
       el('div', { class: 'par-track' }, [this.parFill]),
-      this.hintChip,
-      speedPanel,
     ]);
 
-    // --- score, made unmissable --------------------------------------------
+    // --- score, speed and the hint, in one row along the top ----------------
+    // These three all have to survive the Grand Tour, which replaces the
+    // centre prompt entirely — so none of them can live inside it.
     this.scoreValue = el('div', { class: 'score-value', text: '0' });
     this.scoreSub = el('div', { class: 'stat-sub', text: 'no streak' });
-    const tl = el('div', { class: 'hud-tl panel' }, [
-      el('div', { class: 'stat-label', text: 'Score' }),
-      this.scoreValue,
-      this.scoreSub,
+    const tl = el('div', { class: 'hud-topleft' }, [
+      el('div', { class: 'panel score-panel' }, [
+        el('div', { class: 'stat-label', text: 'Score' }),
+        this.scoreValue,
+        this.scoreSub,
+      ]),
+      speedPanel,
+      el('div', { class: 'panel hint-panel' }, [
+        el('div', { class: 'stat-label', text: 'Hint' }),
+        this.hintChip,
+      ]),
     ]);
 
     this.modeLabel = el('div', { class: 'stat-label', text: 'Elapsed' });
@@ -123,11 +132,17 @@ export class Hud {
       this.modeLabel, this.modeValue, this.modeSub, this.muteButton,
     ]);
 
-    // --- the Grand Tour list -----------------------------------------------
-    this.tourList = el('ol', { class: 'tour-list' });
+    // --- the Grand Tour board ------------------------------------------------
+    // Twenty places belong on one board, at the top, with their pictures. A
+    // single-target prompt is meaningless when everything is live at once, and
+    // a text list off to the side was both hard to read and actively wrong —
+    // it rendered image prompts as the words "(flag)".
+    this.tourList = el('div', { class: 'tour-grid' });
+    this.tourReady = el('div', { class: 'tour-ready' });
     this.tourPanel = el('div', { class: 'hud-tour panel', hidden: true }, [
-      el('div', { class: 'stat-label', text: 'The list' }),
+      el('div', { class: 'stat-label', text: 'Find all twenty — any order' }),
       this.tourList,
+      this.tourReady,
     ]);
 
     this.whereCountry = el('div', { class: 'where-country', text: '—' });
@@ -159,7 +174,7 @@ export class Hud {
     this.vignette = el('div', { class: 'danger-vignette' });
 
     this.root = el('div', { class: 'layer' }, [
-      prompt, tl, tr, bl, bc, this.tourPanel, this.minimapSlot, this.toastRail,
+      this.promptPanel, tl, tr, bl, bc, this.tourPanel, this.minimapSlot, this.toastRail,
     ]);
     document.body.append(this.vignette);
   }
@@ -232,25 +247,61 @@ export class Hud {
     );
   }
 
-  /** Show or hide the Grand Tour's list of twenty. */
+  /**
+   * Swap the single-target prompt for the Grand Tour board.
+   *
+   * They are mutually exclusive: on the Tour there is no "current target" in
+   * any sense the player cares about, so a prompt naming one of the twenty is
+   * noise sitting where the board should be.
+   */
   setTourVisible(on: boolean): void {
     this.tourPanel.hidden = !on;
+    this.promptPanel.hidden = on;
+    this.lastTourSignature = '';
+  }
+
+  /** One tile: the prompt as the player will actually have to recognise it. */
+  private tourTile(t: LiveTarget, found: boolean, nearest: boolean): HTMLElement {
+    const base = baseUrl();
+    const art = el('div', { class: 'tour-art' });
+    if (t.image?.type === 'flag' && t.image.iso2) {
+      art.append(el('img', { class: 'flag', src: `${base}flags/${t.image.iso2}.svg`, alt: t.name }));
+    } else if (t.image?.type === 'outline' && t.image.iso3) {
+      art.append(this.maskShape(`${base}outlines/${t.image.iso3}.svg`, t.name));
+    } else if (t.image?.type === 'silhouette' && t.image.id) {
+      art.append(this.maskShape(`${base}silhouettes/${t.image.id}.svg`, t.name));
+    } else {
+      art.append(el('span', { class: 'tour-word', text: t.prompt }));
+    }
+    return el('div', {
+      class: `tour-tile${found ? ' found' : ''}${nearest && !found ? ' nearest' : ''}`,
+      title: t.image ? undefined : t.name,
+    }, [art]);
   }
 
   private updateTour(session: Session): void {
     const all = session.tourAll;
     if (all.length === 0) return;
-    const signature = all.map((t) => (session.isTourFound(t.id) ? '1' : '0')).join('');
+    const nearestId = session.target?.id ?? '';
+    const signature = `${nearestId}|${all.map((t) => (session.isTourFound(t.id) ? '1' : '0')).join('')}`;
     if (signature === this.lastTourSignature) return;
     this.lastTourSignature = signature;
 
     clearChildren(this.tourList);
     for (const t of all) {
-      const found = session.isTourFound(t.id);
-      this.tourList.append(el('li', {
-        class: found ? 'found' : '',
-        text: t.image?.type === 'flag' ? `${t.name} (flag)` : t.name,
-      }));
+      this.tourList.append(this.tourTile(t, session.isTourFound(t.id), t.id === nearestId));
+    }
+  }
+
+  /** The study period banner, shown until the player starts the clock. */
+  setTourReady(ready: boolean): void {
+    clearChildren(this.tourReady);
+    this.tourReady.classList.toggle('on', ready);
+    if (ready) {
+      this.tourReady.append(
+        el('span', { text: 'Take as long as you like — the clock starts when you do.' }),
+        el('span', { class: 'go' }, [el('kbd', { text: 'Click' }), document.createTextNode(' to begin')]),
+      );
     }
   }
 
@@ -362,9 +413,15 @@ export class Hud {
       this.hintChip.append(document.createTextNode('No hints left'));
       return;
     }
+    // On the Grand Tour a hint can only sensibly point at whichever place is
+    // closest, so say so rather than naming a "current target" that does not
+    // exist when twenty of them are live.
+    const label = session.options.mode === 'tour'
+      ? `Nearest place · ${this.hintNames[paid] ?? 'Hint'}`
+      : (this.hintNames[paid] ?? 'Hint');
     this.hintChip.append(
       el('kbd', { text: 'Space' }),
-      document.createTextNode(`${this.hintNames[paid] ?? 'Hint'} · −${formatScore(session.nextHintCost)}`),
+      document.createTextNode(`${label} · −${formatScore(session.nextHintCost)}`),
     );
   }
 

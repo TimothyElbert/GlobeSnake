@@ -24,7 +24,13 @@ import {
  * targets. Ranked on finishing time, not points.
  */
 export type GameMode = 'endless' | 'daily' | 'relay' | 'tour';
-export type Phase = 'idle' | 'playing' | 'paused' | 'captured' | 'dead' | 'finished';
+/**
+ * `ready` is the Grand Tour's study period: the list is on screen, the world is
+ * on screen, and nothing is moving or being timed. Being ranked on speed while
+ * reading twenty place names for the first time would measure reading, not
+ * route planning.
+ */
+export type Phase = 'idle' | 'ready' | 'playing' | 'paused' | 'captured' | 'dead' | 'finished';
 
 export interface SessionOptions {
   mode: GameMode;
@@ -236,8 +242,14 @@ export class Session {
 
     const spawn = this.findSpawn();
     this.snake.reset(spawn.position, spawn.heading);
-    this.phase = 'playing';
+    // The Grand Tour waits for the player to say go; everything else starts.
+    this.phase = this.options.mode === 'tour' ? 'ready' : 'playing';
     this.nextTarget();
+  }
+
+  /** Leave the study period and start the clock. */
+  beginPlay(): void {
+    if (this.phase === 'ready') this.phase = 'playing';
   }
 
   /**

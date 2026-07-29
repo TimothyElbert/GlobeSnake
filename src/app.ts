@@ -310,6 +310,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     hud.clearToasts();
     hud.setVisible(true);
     hud.setTourVisible(mode === 'tour');
+    hud.setTourReady(session.phase === 'ready');
     audio.revive();
     config.onReset?.(ctx);
   }
@@ -353,7 +354,22 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
 
   // --- input wiring ---------------------------------------------------------
 
-  input.on('hint', () => { void audio.ensureStarted(); takeHint(); });
+  /** Any deliberate input ends the Grand Tour's study period. */
+  function leaveReady(): boolean {
+    if (session?.phase !== 'ready') return false;
+    session.beginPlay();
+    hud.setTourReady(false);
+    return true;
+  }
+  canvas.addEventListener('pointerdown', () => { void audio.ensureStarted(); leaveReady(); });
+
+  input.on('hint', () => {
+    void audio.ensureStarted();
+    // The first Space starts the clock rather than spending a hint on a target
+    // the player has not begun looking for.
+    if (leaveReady()) return;
+    takeHint();
+  });
   input.on('pause', () => {
     if (!session) return;
     if (summary.visible) return;
@@ -445,7 +461,9 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
         camera.update(s.snake.position, s.snake.heading, frameDt, s.snake.speedScale, ground);
         applyHints(s);
 
-        if (s.phase === 'playing' || s.phase === 'captured') {
+        // `ready` included: the Grand Tour's study period has the board on
+        // screen and the world turning, it just is not being timed yet.
+        if (s.phase === 'playing' || s.phase === 'captured' || s.phase === 'ready') {
           hud.update(s);
           minimap.update(
             frameDt, s.snake.position, s.snake.heading, s.snake,
