@@ -98,11 +98,6 @@ const FRAG = /* glsl */ `
   uniform float uWedgeCos;
   uniform float uWedgeStrength;
 
-  uniform vec3  uBandCenter;
-  uniform float uBandMin;
-  uniform float uBandMax;
-  uniform float uBandStrength;
-
   uniform vec3  uRingCenter;
   uniform float uRingRadius;
   uniform float uRingStrength;
@@ -234,15 +229,12 @@ const FRAG = /* glsl */ `
       }
     }
 
-    // --- hint 1: distance band ----------------------------------------------
-    if (uBandStrength > 0.001) {
-      float a = angleTo(sphereDir, uBandCenter);
-      float band = smoothstep(uBandMin - 0.012, uBandMin + 0.012, a)
-                 * (1.0 - smoothstep(uBandMax - 0.012, uBandMax + 0.012, a));
-      float edge = (1.0 - smoothstep(0.0, 0.016, abs(a - uBandMin)))
-                 + (1.0 - smoothstep(0.0, 0.016, abs(a - uBandMax)));
-      col += vec3(0.35, 0.85, 1.0) * (band * 0.14 + edge * 1.1) * uBandStrength;
-    }
+    // The level-1 hint used to also paint a distance band on the globe. For a
+    // nearby target the band ran from zero, so its inner edge collapsed onto
+    // the player and it read as a bright donut around the snake — visually
+    // loud, and impossible to tell apart from the cone it sat inside. The
+    // range is a text line in the HUD now, which says the same thing without
+    // competing with the one overlay that has a direction in it.
 
     // --- hint 2: search circle around the target ----------------------------
     if (uRingStrength > 0.001) {
@@ -464,10 +456,6 @@ export class Globe {
         uWedgeDir: { value: new Vector3(0, 1, 0) },
         uWedgeCos: { value: Math.cos(Math.PI / 4) },
         uWedgeStrength: { value: 0 },
-        uBandCenter: { value: new Vector3(1, 0, 0) },
-        uBandMin: { value: 0 },
-        uBandMax: { value: 0 },
-        uBandStrength: { value: 0 },
         uRingCenter: { value: new Vector3(1, 0, 0) },
         uRingRadius: { value: 0.2 },
         uRingStrength: { value: 0 },
@@ -544,14 +532,6 @@ export class Globe {
     u.uWedgeStrength.value = strength;
   }
 
-  setBand(centre: Vector3, minRad: number, maxRad: number, strength: number): void {
-    const u = this.material.uniforms;
-    (u.uBandCenter.value as Vector3).copy(centre);
-    u.uBandMin.value = minRad;
-    u.uBandMax.value = maxRad;
-    u.uBandStrength.value = strength;
-  }
-
   setRing(centre: Vector3, radiusRad: number, strength: number): void {
     const u = this.material.uniforms;
     (u.uRingCenter.value as Vector3).copy(centre);
@@ -562,7 +542,6 @@ export class Globe {
   clearHints(): void {
     const u = this.material.uniforms;
     u.uWedgeStrength.value = 0;
-    u.uBandStrength.value = 0;
     u.uRingStrength.value = 0;
     u.uHighlightStrength.value = 0;
   }

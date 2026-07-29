@@ -217,8 +217,11 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     },
     (style) => { void audio.ensureStarted(); audio.setMusicStyle(style); },
     audio.musicStyle,
+    (value) => { input.sensitivity = value; setPref('sensitivity', value); },
+    pref('sensitivity', 1),
   );
   start.mount();
+  input.sensitivity = pref('sensitivity', 1);
 
   const pause = new PauseScreen(
     () => { pause.hide(); session && (session.phase = 'playing'); },
@@ -407,8 +410,6 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
       // bearing it uses is deliberately offset — see Session.targetTangent.
       s.targetTangent(_tan);
       globe.setWedge(s.snake.position, _tan, WEDGE_HALF_ANGLE, 1);
-      const [lo, hi] = s.distanceBand();
-      globe.setBand(s.snake.position, lo, hi, 1);
     }
     if (level >= 2) {
       // Offset centre: a circle drawn around the answer is a bullseye.
@@ -512,7 +513,7 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   if (import.meta.env.DEV) {
     (window as unknown as Record<string, unknown>).__gs = {
       get session() { return session; },
-      world, globe, camera, ribbon, loop, config, scene, renderer, canvas, audio, hud,
+      world, globe, camera, ribbon, loop, config, scene, renderer, canvas, audio, hud, input,
       beginRun,
       /**
        * Advance and render `seconds` of game time synchronously, then return a

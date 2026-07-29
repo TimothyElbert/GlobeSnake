@@ -701,16 +701,22 @@ export class Session {
   }
 
   /**
-   * Coarse near/medium/far band for hint level 1, as [minRad, maxRad] around
-   * the player. Deliberately wide — this hint narrows the search, it does not
-   * solve it.
+   * Coarse range for hint level 1, as a phrase.
+   *
+   * This used to be an annulus painted on the globe, which for a nearby target
+   * collapsed into a bright donut around the snake and was indistinguishable
+   * from the bearing cone it sat inside. Words carry the same information
+   * without competing with the one overlay that has a direction in it — and
+   * they stay deliberately coarse, because this hint narrows the search rather
+   * than solving it.
    */
-  distanceBand(): [number, number] {
-    const a = this.target ? angleBetween(this.snake.position, this.target.position) : 0;
-    if (a < 25 * DEG) return [0, 25 * DEG];
-    if (a < 60 * DEG) return [25 * DEG, 60 * DEG];
-    if (a < 110 * DEG) return [60 * DEG, 110 * DEG];
-    return [110 * DEG, Math.PI];
+  distanceBandLabel(): string {
+    if (!this.target) return '';
+    const a = angleBetween(this.snake.position, this.target.position);
+    if (a < 25 * DEG) return 'within 2,800 km';
+    if (a < 60 * DEG) return '2,800 – 6,700 km away';
+    if (a < 110 * DEG) return '6,700 – 12,200 km away';
+    return 'over 12,200 km away — the far side';
   }
 
   /** Hint level 2's search circle: 1,500 km around the truth. */

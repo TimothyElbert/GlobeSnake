@@ -1,40 +1,14 @@
 import '@ui/launcher.css';
 
 /**
- * Visitor counting — landing page only.
+ * No analytics, deliberately.
  *
- * GitHub Pages has no analytics of its own (the repo's Insights → Traffic panel
- * counts visits to the *repository page*, not to the deployed site), so seeing
- * whether anyone plays this means adding something client-side.
- *
- * It goes here and nowhere else on purpose. The three game pages promise, in
- * their own Credits tab, that they make no network requests at all once loaded,
- * and that promise is worth more than knowing which world is most popular. So
- * the counter lives on the front door and the game itself stays silent.
- *
- * GoatCounter: no cookies, no cross-site tracking, no personal data, and it
- * respects Do Not Track. To switch it on, create a free site at
- * goatcounter.com and put the code here — the subdomain it gives you, e.g.
- * 'globesnake' for globesnake.goatcounter.com. Empty means no script is loaded
- * and no request is made, which is the default.
+ * A visitor counter was built here and then removed: knowing how many people
+ * visit is worth less than being able to say, without an asterisk, that
+ * nothing here talks to anything. Every asset is baked in at build time, so
+ * once a page has loaded it makes no network requests at all — and that is a
+ * property worth keeping absolute rather than nearly true.
  */
-const GOATCOUNTER_CODE = '';
-
-function startVisitorCount(): void {
-  if (!GOATCOUNTER_CODE) return;
-  // Never count our own visits while developing.
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
-
-  const s = document.createElement('script');
-  s.async = true;
-  s.dataset.goatcounter = `https://${GOATCOUNTER_CODE}.goatcounter.com/count`;
-  s.src = '//gc.zgo.at/count.js';
-  document.head.append(s);
-
-  // Only claim to be counting when we actually are.
-  document.querySelector('.analytics-note')?.removeAttribute('hidden');
-}
-startVisitorCount();
 
 /**
  * Launcher backdrop: a slowly turning wireframe globe with a snake tracing a

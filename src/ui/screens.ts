@@ -98,16 +98,21 @@ export class StartScreen {
   private readonly musicButtons = new Map<MusicStyle, HTMLElement>();
   private readonly tabs = new Map<string, { tab: HTMLElement; panel: HTMLElement }>();
   private recordsPanel!: HTMLElement;
+  private sensitivityValue!: HTMLElement;
   private readonly bestLine: HTMLElement;
   private music: MusicStyle = 'score';
+  private sensitivity = 1;
 
   constructor(
     private readonly chrome: VariantChrome,
     private readonly onPlay: (choice: StartChoice) => void,
     private readonly onMusic?: (style: MusicStyle) => void,
     music: MusicStyle = 'score',
+    private readonly onSensitivity?: (value: number) => void,
+    sensitivity = 1,
   ) {
     this.music = music;
+    this.sensitivity = sensitivity;
     this.bestLine = el('div', { class: 'stat-sub' });
 
     const modeGrid = el('div', { class: 'choices cols-2' });
@@ -166,10 +171,33 @@ export class StartScreen {
         : []),
     ]);
 
+    this.sensitivityValue = el('span', { class: 'slider-value', text: '1.00×' });
+    const sensitivitySlider = el('input', {
+      type: 'range', min: '0.35', max: '2.5', step: '0.05',
+      value: String(this.sensitivity),
+      class: 'slider',
+      'aria-label': 'Steering sensitivity',
+      oninput: (e: Event) => this.setSensitivity(Number((e.target as HTMLInputElement).value)),
+    });
+
     const controlsPanel = el('div', { class: 'tab-panel', hidden: true }, [
       el('p', { class: 'lede', text:
         'Steer with the mouse — the snake chases your cursor, and how far ahead you reach is your throttle. ' +
         'That is the whole control surface.' }),
+
+      el('h2', { text: 'Steering sensitivity' }),
+      el('div', { class: 'slider-row' }, [
+        el('span', { class: 'slider-end', text: 'Smooth' }),
+        sensitivitySlider,
+        el('span', { class: 'slider-end', text: 'Sharp' }),
+        this.sensitivityValue,
+      ]),
+      el('p', { class: 'lede', text:
+        'How hard the snake chases the cursor. Low is calmer and easier to hold a line with; high ' +
+        'snaps onto the cursor and makes threading a gap in your own body possible at speed. It ' +
+        'cannot turn tighter than the snake physically can, whatever you set.' }),
+
+      el('h2', { text: 'Keys' }),
       el('div', { class: 'keys' }, [
         keyRow(['Mouse'], 'Steer toward the cursor'),
         keyRow(['Hold'], 'Boost (costs stamina)'),
@@ -202,9 +230,8 @@ export class StartScreen {
     const creditsPanel = el('div', { class: 'tab-panel', hidden: true }, [
       el('p', { class: 'lede', html:
         'Every asset here is public domain or permissively licensed, baked in at build time. ' +
-        'Once this page has loaded it makes no network requests at all — there is no backend, ' +
-        'no account and nothing counting you, and your records live only in this browser. ' +
-        '(The landing page may count anonymous visits; this one does not.)' }),
+        'Once the page has loaded, nothing here makes a network request of any kind — no backend, ' +
+        'no account, no analytics, nobody counting you. Your records live only in this browser.' }),
       el('ul', { class: 'lede' }, [
         el('li', { html: 'Imagery and elevation — NASA Visible Earth: Blue&nbsp;Marble, Earth at Night, GEBCO_08. Public domain.' }),
         el('li', { html: 'Coastlines, borders, rivers, lakes, glaciers — Natural&nbsp;Earth. Public domain.' }),
@@ -258,6 +285,12 @@ export class StartScreen {
       panel.hidden = !on;
     }
     if (name === 'Records') this.renderRecords();
+  }
+
+  private setSensitivity(v: number): void {
+    this.sensitivity = v;
+    this.sensitivityValue.textContent = `${v.toFixed(2)}×`;
+    this.onSensitivity?.(v);
   }
 
   private selectMusic(s: MusicStyle): void {

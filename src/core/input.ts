@@ -36,6 +36,18 @@ export class InputManager {
   /** Set true by variants that want the pointer scheme from the first frame. */
   preferPointer = false;
 
+  /**
+   * How hard the snake chases the cursor. 1 is the default.
+   *
+   * Steering is a pursuit controller, so this is not screen-pointer speed — it
+   * is how much of the available turn rate a given aiming error commands. Low
+   * values ease into corners and are calmer to hold a line with; high values
+   * snap onto the cursor and make threading a gap in your own body possible at
+   * speed. It never raises the snake's maximum turn rate, so it cannot buy you
+   * a tighter circle than the physics allows.
+   */
+  sensitivity = 1;
+
   private readonly out: SteerInput = { turn: 0, boost: false };
 
   constructor(
@@ -184,8 +196,10 @@ export class InputManager {
     const err = signedTurnToward(position, heading, this.hitPoint);
     // Normalise by a couple of frames' worth of turn so the snake commits fully
     // to a real correction but does not jitter on sub-degree error.
-    o.turn = clamp(err / Math.max(turnRateRad * 2, 1e-4), -1, 1);
-    if (Math.abs(err) < 0.008) o.turn = 0;
+    o.turn = clamp((err * this.sensitivity) / Math.max(turnRateRad * 2, 1e-4), -1, 1);
+    // The deadzone scales inversely, or a high sensitivity would turn cursor
+    // tremor into a twitch.
+    if (Math.abs(err) < 0.008 / this.sensitivity) o.turn = 0;
 
     // Reaching far ahead of the snake asks it to hurry; holding the button
     // asks outright.

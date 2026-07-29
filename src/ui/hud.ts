@@ -34,6 +34,7 @@ export class Hud {
   private readonly promptMeta: HTMLElement;
   private readonly parFill: HTMLElement;
   private readonly hintChip: HTMLElement;
+  private readonly hintRange: HTMLElement;
 
   private readonly scoreValue: HTMLElement;
   private readonly scoreSub: HTMLElement;
@@ -80,6 +81,7 @@ export class Hud {
     this.promptMeta = el('div', { class: 'prompt-meta' });
     this.parFill = el('i', { class: 'par-fill' });
     this.hintChip = el('button', { class: 'hint-chip', type: 'button' });
+    this.hintRange = el('div', { class: 'hint-range' });
 
     // --- terrain, right beside the prompt where it cannot be ignored -------
     this.speedValue = el('span', { class: 'speed-value', text: '×1.00' });
@@ -116,6 +118,7 @@ export class Hud {
       el('div', { class: 'panel hint-panel' }, [
         el('div', { class: 'stat-label', text: 'Hint' }),
         this.hintChip,
+        this.hintRange,
       ]),
     ]);
     // The tour board joins this stack further down, once it has been built.
@@ -417,6 +420,10 @@ export class Hud {
   }
 
   private updateHintChip(session: Session): void {
+    // The range appears once a hint has been bought, and is what the on-globe
+    // distance band used to say.
+    this.hintRange.textContent = session.hintLevel > 0 ? session.distanceBandLabel() : '';
+
     clearChildren(this.hintChip);
     this.hintChip.className = 'hint-chip';
     const paid = session.paidHintLevel;
