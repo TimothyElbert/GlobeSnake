@@ -128,8 +128,25 @@ Ocean depth is the one synthesized layer: there is no real bathymetric grid in t
 undersea elevation is plausible shading rather than measurement. It affects nothing but colour.
 
 See [`public/data/BAKE_REPORT.md`](public/data/BAKE_REPORT.md) for the full ledger of what is real
-versus derived, and [`docs/DESIGN.md`](docs/DESIGN.md) for the design rationale — including the
-arguments that were had and lost.
+versus derived.
+
+---
+
+## Working on it
+
+| | |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Start here. Orientation, commands, house rules. |
+| [docs/INVARIANTS.md](docs/INVARIANTS.md) | The traps, each with the bug it caused. Read before touching geometry, relief, hints or the trail. |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, data flow, "to change X, edit Y". |
+| [docs/TESTING.md](docs/TESTING.md) | How to verify without a compositing browser. Non-obvious. |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | Current state, known gaps, what to do next. |
+| [docs/DESIGN.md](docs/DESIGN.md) | Why it is like this. Its Revisions section is authoritative. |
+| [docs/BRIEF.md](docs/BRIEF.md) | Historical: the pre-build brief. Several proposals were overturned. |
+
+```bash
+npm run verify    # typecheck + target validation + 68 bake assertions
+```
 
 ## Licence
 

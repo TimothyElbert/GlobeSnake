@@ -195,6 +195,18 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
   // Whatever the globe is displacing by, the snake, camera and pins must use
   // the same number or they will not touch the ground.
   const reliefScale = config.relief ?? RELIEF_SCALE;
+  if (import.meta.env.DEV) {
+    const globeRelief = config.globe?.relief ?? RELIEF_SCALE;
+    if (globeRelief !== reliefScale) {
+      // This exact mismatch shipped once: Terra had a flat globe and a snake
+      // that still climbed the full relief, so the body appeared to glitch over
+      // invisible mountains. See docs/INVARIANTS.md §2.
+      console.error(
+        `[app] relief mismatch: globe displaces by ${globeRelief} but the snake, camera and pins ` +
+        `use ${reliefScale}. They must be equal or nothing will sit on the ground.`,
+      );
+    }
+  }
 
   // Persisted view preferences. Borders default ON: this is a game about
   // recognising countries, and a player who cannot see where one ends is being
