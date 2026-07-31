@@ -63,15 +63,35 @@ async function assertNoDrift() {
   // The floor must clear the tunnelling bound for every variant. Reads
   // baseSpeedDeg out of each variant rather than assuming the engine default,
   // which is the mistake that made the Tempest figure wrong.
+  // A derivation that cannot read its inputs must not fall back on a remembered
+  // number. This used to default to the 3.6 engine constant when a variant would
+  // not parse, described as "the safe assumption" — safe only because 3.6 happens
+  // to be the slowest of the three today. The day a variant is faster and its
+  // override stops parsing, that fallback silently understates the bound and the
+  // build stays green. Fail by name instead.
   const variants = [];
   for (const [file, hasWind] of [['expedition', false], ['tempest', true], ['terra', false]]) {
-    let base = 3.6;                                     // snake.ts default
+    let src;
     try {
-      const vs = await readFile(join(ROOT, 'src', 'variants', `${file}.ts`), 'utf8');
-      const bm = vs.match(/baseSpeedDeg:\s*([\d.]+)/);
-      if (bm) base = Number(bm[1]);
-    } catch { /* variant missing; the default is the safe assumption */ }
-    variants.push([file, base, hasWind]);
+      src = await readFile(join(ROOT, 'src', 'variants', `${file}.ts`), 'utf8');
+    } catch {
+      errors.push(`cannot read src/variants/${file}.ts, so the tunnelling bound cannot be derived — refusing to assume a speed`);
+      continue;
+    }
+    const bm = src.match(/baseSpeedDeg:\s*([\d.]+)/);
+    if (!bm) {
+      // No override is legitimate: the variant inherits snake.ts. But confirm the
+      // default is still what this test thinks it is, rather than assuming.
+      const snake = await readFile(join(ROOT, 'src', 'core', 'snake.ts'), 'utf8');
+      const dm = snake.match(/baseSpeedDeg:\s*([\d.]+)/);
+      if (!dm) {
+        errors.push(`src/variants/${file}.ts has no baseSpeedDeg and the default cannot be read from core/snake.ts — refusing to assume a speed`);
+        continue;
+      }
+      variants.push([file, Number(dm[1]), hasWind]);
+      continue;
+    }
+    variants.push([file, Number(bm[1]), hasWind]);
   }
   const { worst, detail } = requiredFloorKm(variants);
   if (MIN_INRADIUS_KM < worst) {
