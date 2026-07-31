@@ -70,6 +70,7 @@ breaking the build.
 
 ```bash
 npm run validate:targets   # checks all 407 targets against the baked border map
+npm run validate:capture   # checks all 407 can actually be won — a different question
 npm run build              # typecheck + production bundle into dist/
 node tools/bake/verify.mjs # 68 assertions over the baked world data
 ```

@@ -108,7 +108,7 @@ caught reading as a mountain range.
 ## Automated checks
 
 ```bash
-npm run verify        # typecheck + validate:targets + bake verify. Run before every commit.
+npm run verify        # typecheck + validate:targets + validate:capture + bake verify. Before every commit.
 ```
 
 - **`tsc --noEmit`** — `strict`, plus `noUnusedLocals` / `noUnusedParameters`.
@@ -116,6 +116,11 @@ npm run verify        # typecheck + validate:targets + bake verify. Run before e
   Country-captured targets *must* rasterise inside their own country; a flipped longitude sign is the
   most common authoring error and this catches it. Warnings are informational (border summits nudged
   to one side, sub-texel atolls); errors fail the build.
+- **`npm run validate:capture`** — can each target actually be *won*? Measures the capture inradius
+  (the smallest distance, over 32 bearings from the authored point, at which capture stops holding)
+  and fails under 50 km. This is a different question from `validate:targets`, which only checks that
+  the coordinates are authored correctly; it passed 407/407 while 31 targets were unreachable. Also
+  reads `targets.ts` back and fails if the capture rule or its constants drift from the test's copy.
 - **`node tools/bake/verify.mjs`** — 68 assertions over the baked world: magic and dimensions,
   Everest is mountain-class above 230, the Sahara is desert, the Amazon is forest, central Greenland
   is ice, Point Nemo is ocean with country 0, London is GBR, Brasília is BRA, mountain coverage as a

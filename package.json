@@ -11,7 +11,8 @@
     "bake": "node tools/bake/index.mjs",
     "bake:force": "node tools/bake/index.mjs --force",
     "validate:targets": "node tools/validate-targets.mjs",
-    "verify": "tsc --noEmit && node tools/validate-targets.mjs && node tools/bake/verify.mjs",
+    "validate:capture": "node tools/validate-capture.mjs",
+    "verify": "tsc --noEmit && node tools/validate-targets.mjs && node tools/validate-capture.mjs && node tools/bake/verify.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

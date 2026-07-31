@@ -36,6 +36,7 @@ npm run bake                    # re-derive public/data + public/textures (downl
 node tools/bake/verify.mjs      # 68 assertions over the baked world
 node tools/fetch-flags.mjs      # vendor the flag SVGs the dataset references
 npm run validate:targets        # all 407 targets against the rasterised borders
+npm run validate:capture        # all 407 can actually be won — a different question
 ```
 
 ## Scale, for orientation
@@ -104,3 +105,6 @@ Five things account for most of the difficulty. All are documented properly in
 4. **`world.bin` is deliberately not a PNG**, and the data texture's orientation differs from image
    textures.
 5. **Terra Incognita must not leak the map** — through relief shading, the minimap, or the HUD.
+6. **A target's capture rule must be country *and* radius, never one instead of the other.** The
+   exclusive version made 31 targets unwinnable and softlocked runs, while the dataset validator
+   passed 407/407.

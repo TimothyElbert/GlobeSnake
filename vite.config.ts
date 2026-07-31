@@ -72,6 +72,9 @@ export default defineConfig({
       },
     },
   },
-  server: { port: 5173, open: false },
+  // 5173 by default, but honour PORT so a second checkout (or a fork) can run
+  // its own dev server alongside this one. Verifying against the wrong tree is a
+  // very quiet way to waste an afternoon.
+  server: { port: Number(process.env.PORT) || 5173, open: false },
   preview: { port: 4173 },
 });

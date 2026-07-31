@@ -176,3 +176,43 @@ being able to say that without an asterisk is worth more than visit counts.
 
 If you need to check this holds: after load, `performance.getEntriesByType('resource')` must contain
 no entry whose name lies outside `location.origin`.
+
+## 12. Every target must be capturable
+
+`game/targets.ts` · `tools/validate-capture.mjs`
+
+Capture used to be **country _or_ radius, exclusively**: resolving a country index discarded the
+authored `radiusKm`, and the tier defaults for tiers 1–2 were `0`. `world.bin` is 4096×2048, about
+9.8 km per texel at the equator, so Nauru — 21 km² — rasterises to a **single cell**, and its
+authored 300 km radius was thrown away on the grounds that a country rule existed. Thirty-one
+targets had a capture inradius under 50 km; ten were under 3.5 km.
+
+Flying at Nauru from 600 km out and sweeping the aim error, measured in the running engine: a
+*perfect* line still won (closest approach 5.8 km, inside the texel), 5 km of aim error still won,
+**10 km of aim error missed and every value above it missed.** So these were not quite mathematically
+impossible — they demanded better than 10 km of precision on a globe you steer with a mouse, while
+[the hint system deliberately jitters its cone by 12–29° and offsets its search circle by 640–1065 km](#8-hints-must-not-point-at-the-answer).
+No player following a hint could ever have landed it. The run could not advance and the only way out
+was to end it.
+
+The rules are now OR-ed, and every target resolves a radius whether or not it also has a country
+rule. A country rule still means "you were in the country"; the radius only adds a disc around the
+representative point, which for anywhere larger than the disc lies entirely inside the country and
+changes nothing. No entry in `TIER_RADIUS_KM` may be zero — 75 targets carry no authored radius and
+would fall straight through to it.
+
+The metric that matters is the **capture inradius**: walk outward from the authored point along 32
+bearings, and take the smallest distance at which capture stops holding. It answers "how badly may I
+aim and still win", which is what a player actually experiences, and unlike a cell count it does not
+care how the raster happens to be resolved. `npm run validate:capture` measures it for all 407 and
+fails under 50 km. It also reads `targets.ts` back and fails if the OR is reverted or the constant
+drifts from the test's copy of it.
+
+Note that capture is **point-sampled once per tick**, unlike self-collision, which is swept along the
+arc. At base speed the head advances ~3.3 km per tick, so a capture region of a few texels can be
+stepped over entirely. Any capture region near the texel scale is unreliable even when it is not
+strictly impossible — which is the deeper reason the radius has to be a floor.
+
+**This one shipped, and `npm run validate:targets` passed 407/407 the whole time.** It checks that
+coordinates are authored correctly — that Tunisia's point rasterises inside Tunisia. Whether a
+player can ever satisfy the win condition is a different property, and nothing was testing it.

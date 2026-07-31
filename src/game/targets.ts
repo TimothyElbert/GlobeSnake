@@ -29,9 +29,9 @@ export interface TargetRecord {
 /** A target with its runtime-resolved position and capture rule. */
 export interface LiveTarget extends TargetRecord {
   position: Vector3;
-  /** Capture radius in radians, or 0 when capture is by country index. */
+  /** Capture radius in radians. Always > 0 — see TIER_RADIUS_KM. */
   captureRad: number;
-  /** Country index that satisfies capture, or 0 when capture is by radius. */
+  /** Country index that also satisfies capture, or 0 if there is no country rule. */
   captureCountry: number;
 }
 
@@ -42,8 +42,14 @@ export interface LiveTarget extends TargetRecord {
  * it reads as "the game cheated" — the player was standing on Big Ben and the
  * game disagreed. Obscure targets get *more* slack, not less: the hard part is
  * knowing where Kerguelen is, not threading a needle once you are there.
+ *
+ * Index 0 is unused (tier is clamped to 1–5) but every live entry must stay
+ * non-zero. Tiers 1 and 2 were once `0`, which was survivable only because every
+ * target at those tiers happened to carry a working country rule; the day one
+ * stopped, its radius would have been zero and the target unreachable. A zero
+ * here is a softlock waiting for a re-bake.
  */
-const TIER_RADIUS_KM = [0, 0, 200, 150, 220, 320];
+const TIER_RADIUS_KM = [0, 250, 200, 150, 220, 320];
 
 export type Deck = 'explorer' | 'standard' | 'expert';
 
@@ -95,9 +101,31 @@ export class TargetPool {
       if ((r.kind === 'country' || r.kind === 'flag' || r.kind === 'outline') && r.countryIso3) {
         captureCountry = world.countryByIso3(r.countryIso3)?.idx ?? 0;
       }
-      if (captureCountry === 0) {
-        const km = r.radiusKm ?? TIER_RADIUS_KM[Math.min(Math.max(r.tier, 1), 5)] ?? 200;
-        captureRad = km / EARTH_RADIUS_KM;
+
+      // ...but the country rule is a floor on generosity, never a ceiling, so
+      // the radius is always resolved too and the two are OR-ed at capture time.
+      // These were once mutually exclusive, and it made six targets unwinnable:
+      // world.bin is 4096×2048, i.e. ~9.8 km per texel at the equator, so Nauru
+      // (21 km²) rasterises to a *single cell*. Capture demanded the head land on
+      // that one texel, the authored 300 km radius was discarded on the grounds
+      // that a country rule existed, and the run could not advance. Niue,
+      // Barbados, Grenada, Saint Lucia and the Seychelles were the same story.
+      // A country rule still means "you were in the country"; the radius only
+      // adds a disc around the representative point, which for anywhere larger
+      // than the disc lies entirely inside the country and changes nothing.
+      const km = r.radiusKm ?? TIER_RADIUS_KM[Math.min(Math.max(r.tier, 1), 5)] ?? 200;
+      captureRad = km / EARTH_RADIUS_KM;
+
+      // A target nobody can reach does not misbehave — it stops the run dead,
+      // with no error and nothing on screen to explain it. `npm run verify`
+      // measures this properly across all 407; this is the backstop for a
+      // dataset edited without running it.
+      if (import.meta.env.DEV && captureRad <= 0) {
+        console.error(
+          `[TargetPool] "${r.id}" has no capture radius, so it can only be won by ` +
+          `standing inside its country in the raster. If that country is small, the run softlocks. ` +
+          `Give it a radiusKm, or fix TIER_RADIUS_KM[${r.tier}].`,
+        );
       }
 
       const live: LiveTarget = { ...r, position, captureRad, captureCountry };
@@ -249,8 +277,14 @@ export class DifficultyDrift {
   }
 }
 
-/** Is the head inside this target? */
+/**
+ * Is the head inside this target?
+ *
+ * Either rule alone is enough. Being anywhere in the country counts, and so does
+ * being within the radius of the representative point — the second is what makes
+ * a country too small to rasterise reachable at all.
+ */
 export function isCaptured(target: LiveTarget, head: Vector3, world: WorldData): boolean {
-  if (target.captureCountry > 0) return world.countryAt(head) === target.captureCountry;
+  if (target.captureCountry > 0 && world.countryAt(head) === target.captureCountry) return true;
   return Math.acos(Math.max(-1, Math.min(1, head.dot(target.position)))) <= target.captureRad;
 }

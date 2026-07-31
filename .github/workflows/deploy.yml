@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - name: Validate target dataset
         run: npm run validate:targets
+      - name: Validate every target is capturable
+        run: npm run validate:capture
       - name: Build
         run: npm run build
         env:
