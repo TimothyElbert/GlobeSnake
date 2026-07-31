@@ -108,7 +108,7 @@ cannot disagree by construction.
 
 ## Where the bodies are buried
 
-Five things account for most of the difficulty. All are documented properly in
+Six things account for most of the difficulty. All are documented properly in
 [docs/INVARIANTS.md](docs/INVARIANTS.md); this is the index:
 
 1. **Coordinate handedness and triangle winding are a matched pair.** Change one, change both.
@@ -118,5 +118,6 @@ Five things account for most of the difficulty. All are documented properly in
    textures.
 5. **Terra Incognita must not leak the map** — through relief shading, the minimap, or the HUD.
 6. **A target's capture rule must be country *and* radius, never one instead of the other.** The
-   exclusive version made 31 targets unwinnable and softlocked runs, while the dataset validator
-   passed 407/407.
+   exclusive version made 32 targets unwinnable and softlocked runs, while the dataset validator
+   passed 407/407. The capture floor is tied to the *fastest* variant's per-tick advance — see
+   [INVARIANTS §12](docs/INVARIANTS.md); it is not a number you may pick by feel.
