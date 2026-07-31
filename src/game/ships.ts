@@ -143,10 +143,23 @@ export class ShipFleet {
     this.writeInstances();
   }
 
+  /**
+   * Optional gate on whether a ship may be *drawn*. Never on whether it exists.
+   *
+   * Terra hides ground the player has not seen, and a ship only ever sits on
+   * water — so drawing one over blank vellum reveals ocean, and a run's worth of
+   * them reveals the coastline by exclusion. The simulation is deliberately left
+   * alone: hidden ships still sail and are still swallowed on contact, because a
+   * ship is a bonus rather than a hazard. An unseen prize is not unfair; only the
+   * leak was. Compare §4 — anything *lethal* must be drawn at its true size.
+   */
+  visibleAt: ((p: Vector3) => boolean) | null = null;
+
   private writeInstances(): void {
     let n = 0;
     for (const ship of this.ships) {
       if (!ship.alive) continue;
+      if (this.visibleAt && !this.visibleAt(ship.pos)) continue;
       _bin.copy(ship.dir).cross(ship.pos).normalize();
       _mat.makeBasis(ship.dir, ship.pos, _bin);
       // Ships only ever sit on water, where the relief is flat, so a constant
@@ -185,9 +198,18 @@ export class ShipFleet {
     return null;
   }
 
-  /** Live ship positions, for the minimap. */
+  /**
+   * Live ship positions, for the minimap — filtered by the same `visibleAt`
+   * predicate the globe uses, so the two surfaces cannot disagree about what is
+   * on screen. They already disagreed once: the minimap fogged the map while
+   * still plotting every hull over it.
+   */
   forEachAlive(fn: (p: Vector3) => void): void {
-    for (const s of this.ships) if (s.alive) fn(s.pos);
+    for (const s of this.ships) {
+      if (!s.alive) continue;
+      if (this.visibleAt && !this.visibleAt(s.pos)) continue;
+      fn(s.pos);
+    }
   }
 
   dispose(): void {

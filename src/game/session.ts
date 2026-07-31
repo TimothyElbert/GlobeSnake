@@ -527,6 +527,31 @@ export class Session {
     }
   }
 
+  /**
+   * Has the player actually seen this point?
+   *
+   * The single predicate every surface must ask before drawing anything that
+   * only exists in one kind of place. Ships are the case that prompted it: they
+   * spawn only on ocean and despawn the moment they touch anything else, so on
+   * Terra's blank vellum a hull is proof of water, and a run's worth of them maps
+   * the sea — and therefore the land — without a coastline ever being drawn.
+   * That is [INVARIANTS §5](../../docs/INVARIANTS.md), and it is the fifth channel
+   * to leak that map.
+   *
+   * Returns true everywhere when the variant does not track exploration, so the
+   * other worlds are unaffected and callers need no special case.
+   */
+  isExplored(p: Vector3): boolean {
+    const grid = this.explored;
+    if (!grid) return true;
+    const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) * (180 / Math.PI);
+    const lon = Math.atan2(-p.z, p.x) * (180 / Math.PI);
+    const row = Math.floor((90 - lat) / EXPLORE_CELL);
+    if (row < 0 || row >= EXPLORE_ROWS) return false;
+    const col = ((Math.floor((lon + 180) / EXPLORE_CELL) % EXPLORE_COLS) + EXPLORE_COLS) % EXPLORE_COLS;
+    return grid[row * EXPLORE_COLS + col] === 1;
+  }
+
   /** Fraction of the globe's surface uncovered, 0..1. */
   get exploredFraction(): number {
     return this.exploredTotal > 0 ? this.exploredWeight / this.exploredTotal : 0;

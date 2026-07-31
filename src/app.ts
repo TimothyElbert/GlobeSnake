@@ -302,6 +302,15 @@ export async function bootstrap(config: VariantConfig): Promise<void> {
     ctx = { scene, renderer, camera, globe, ribbon, world, session, hud, audio, input, time };
     scene.add(session.ships.group);
 
+    // Terra hides unseen ground, and a ship is only ever on water — so an
+    // undrawn map with hulls on it is still a map. One predicate feeds both the
+    // globe instances and the minimap dots, so they cannot drift apart.
+    // `isExplored` returns true everywhere when exploration is not tracked, so
+    // this line costs the other worlds nothing.
+    session.ships.visibleAt = config.trackExploration
+      ? (p) => session!.isExplored(p)
+      : null;
+
     session.setEvents({
       onTarget: (t, i) => {
         hud.setTarget(t, i, mode === 'daily' ? session!.dailyTotal : 0);

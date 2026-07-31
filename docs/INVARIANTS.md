@@ -85,7 +85,7 @@ colour now, which cannot lie about the hitbox. **Leave `dryWidth` at 1.**
 
 `variants/terra.ts` · `render/globe.ts` (parchment branch) · `ui/minimap.ts` · `ui/hud.ts`
 
-The whole premise is that you do not know where you are until you have looked. Four separate
+The whole premise is that you do not know where you are until you have looked. **Five** separate
 channels have leaked it:
 
 - **Relief shading.** Setting `relief: 0` stops displacement but not the normal perturbation, which
@@ -96,8 +96,22 @@ channels have leaked it:
   them. It now takes `session.exploredMask` and draws unseen ground as blank vellum.
 - **The HUD.** "You are in: Kazakhstan" is the free geography teacher everywhere else and the answer
   here. `hideLocation: true`.
+- **The ships.** A ship spawns only on `Terrain.Ocean` and dies the moment it touches anything else,
+  so on blank vellum **a hull is proof of water** — and a run's worth of them maps the sea, and
+  therefore the land, without a single coastline being drawn. It leaked on both surfaces at once: the
+  globe drew every live instance, and the minimap fogged the *map* while still plotting every dot over
+  it. `ShipFleet.visibleAt` now gates both from one predicate, `Session.isExplored`, so the two cannot
+  disagree — which they already had.
 
-Coastlines appear only where `inked > 0`. If you add any new overlay, ask what it reveals.
+  **The simulation is deliberately untouched.** Hidden ships still sail and are still swallowed on
+  contact. A ship is a bonus, not a hazard, and an unseen *prize* is not unfair — only the leak was.
+  That is the exact inverse of §4: anything **lethal** must be drawn at its true size. Ask which of
+  the two any new hidden thing is before hiding it.
+
+Coastlines appear only where `inked > 0`. **If you add any new overlay, ask what it reveals** — and
+note that four of these five were things nobody thought of as map data at all. Relief is lighting,
+paper is texture, ships are props. The question is not "does this draw the map" but "does this appear
+in some places and not others".
 
 ## 6. `world.bin` is deliberately not a PNG
 

@@ -99,7 +99,7 @@ Worth reading as a list of failure modes this codebase is prone to. All are now 
 | Ships never added to the scene graph | Simulated, collidable, on the minimap, invisible on the globe | Placing one 3° ahead and looking |
 | Invisible lethal trail in Grand Tour | Tail appeared to crawl toward the player; death by an unseen wall | Player report, then measuring drawn window vs lethal window |
 | Dried trail drawn at half its collision width | Clearing a gap and dying anyway | Reading the code while fixing the above |
-| Terra leaked the map four different ways | Continents visible through fog; whole world in the minimap | Player report, then auditing every overlay |
+| Terra leaked the map five different ways | Continents through fog; whole world in the minimap; ship hulls tracing the ocean on blank vellum | Player reports, then auditing every overlay — the fifth found on a fork, in play |
 | Snake rode invisible mountains | Body climbing terrain a flat globe was not drawing | Player report |
 | `vertexColors: true` with no colour attribute | Ships rendered pure black on a dark ocean | Inspecting material state at runtime |
 | Hint cone aimed at the target | Hints far more useful than designed | Player report, then measuring offset over 25 targets |
