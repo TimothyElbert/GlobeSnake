@@ -255,10 +255,22 @@ function advance(p, h, arc) {
   ]);
 }
 
-/** A unit tangent at `p` rotated `bearingDeg` clockwise from local north. */
+/**
+ * A unit tangent at `p` rotated `bearingDeg` clockwise from local north.
+ *
+ * The reference axis must not be parallel to `p`, or `cross` returns the zero
+ * vector, `normalise` hands back zeros, `advance` never moves, and the scan
+ * reports the ceiling — i.e. a degenerate target is reported as maximally *safe*,
+ * which is the worst possible direction for this failure.
+ *
+ * This used to say "degenerate at the exact poles; no target sits there."
+ * `landmark-south-pole` sits at exactly −90. It survived only because
+ * `fromLatLon(-90, 0)` leaves a residual `cos(-90°) = 6.1e-17` that happens to
+ * define a direction — a right answer resting on floating-point luck. Pick an
+ * axis that is actually perpendicular instead.
+ */
 function tangentAtBearing(p, bearingDeg) {
-  // Degenerate at the exact poles; no target sits there.
-  const up = [0, 1, 0];
+  const up = Math.abs(p[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
   const east = normalise(cross(up, p));
   const north = normalise(cross(p, east));
   const b = bearingDeg * DEG;

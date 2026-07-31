@@ -215,9 +215,22 @@ error ran the same way: Norway reported no finding at all against a true 93.3 km
 country-0 where Sognefjord cuts inland), Bangladesh 80.1 against 24.3 (the Meghna estuary), Portugal
 73.6 against 58.6. Thirteen targets overstated, none understated. Under the legacy rule the true count
 below 50 km was **32, not 31** — Bangladesh was the one bisection hid. An inradius that reads too
-large is exactly the error a fairness test must never make. The step is 1 km, because a texel is
-~9.8 km of longitude at the equator but `cos(lat)` of that further north — only ~2 km at Norway's
-latitude.
+large is exactly the error a fairness test must never make.
+
+The step is 1 km, because a texel is 9.77 km of longitude at the equator and `cos(lat)` of that
+further north: **4.74 km at Norway's 61°, 2.03 km at 78°, 0.85 km at 85°.** (An earlier version of
+this paragraph said "~2 km at Norway's latitude" — the 78° figure written against the wrong latitude.
+The fork caught it.) Exactly one target sits where a texel is narrower than the step, and it is the
+one that would matter: `landmark-south-pole`, at −90.
+
+**Beware the pole in `tangentAtBearing`.** The reference axis must not be parallel to `p`, or `cross`
+returns zero, `normalise` hands back zeros, the walk never advances, and the scan reports the ceiling
+— a degenerate target read as maximally *safe*, which is the worst direction for this failure to
+take. This function carried the comment "degenerate at the exact poles; no target sits there" while
+the south pole target sat there. It survived only because `fromLatLon(-90, 0)` leaves a residual
+`cos(-90°) = 6.1e-17` that happens to define a direction. It now picks a genuinely perpendicular
+axis, and **nothing moved** — all four polar targets report the same inradius before and after. That
+is what a latent defect looks like when you find it before it fires.
 
 Note that capture is **point-sampled once per tick**, unlike self-collision, which is swept along the
 arc. So a capture region can in principle be stepped straight over. A path passing at perpendicular
