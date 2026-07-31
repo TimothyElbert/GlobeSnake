@@ -209,9 +209,20 @@ fails under 50 km. It also reads `targets.ts` back and fails if the OR is revert
 drifts from the test's copy of it.
 
 Note that capture is **point-sampled once per tick**, unlike self-collision, which is swept along the
-arc. At base speed the head advances ~3.3 km per tick, so a capture region of a few texels can be
-stepped over entirely. Any capture region near the texel scale is unreliable even when it is not
-strictly impossible — which is the deeper reason the radius has to be a floor.
+arc. So a capture region can in principle be stepped straight over. A path passing at perpendicular
+distance `b` from the authored point has a chord of `2·√(R² − b²)` inside the guaranteed disc, so at
+least one sample lands iff `b ≤ √(R² − (d/2)²)`, where `d` is the greatest distance the head can
+travel in one tick. Keeping the loss under 1% of the disc means **`R ≥ 3.544 · d`**.
+
+`d` is larger than it looks, because every multiplier in `Snake.update` stacks: terrain (river 1.18)
+× ship surge 1.25 × boost 1.35 × wake 1.3, on `baseSpeedDeg` 3.6 at 1/120 s — **8.64 km per tick**.
+Tempest adds wind on top, applied after `step()` and outside that chain; measured at storm eyewalls it
+peaks at 3.18 °/s, another 2.95 km, for **11.59 km per tick** and a required floor of **41.1 km**.
+
+The 50 km floor therefore holds, but with 1.22× headroom, not the comfortable margin the
+non-Tempest figure suggests. **Raise the floor before raising any speed multiplier**, and re-measure
+rather than extrapolating — the binding term is `d`, and it is a product of five things that were
+each tuned for feel, by different people, at different times.
 
 **This one shipped, and `npm run validate:targets` passed 407/407 the whole time.** It checks that
 coordinates are authored correctly — that Tunisia's point rasterises inside Tunisia. Whether a
