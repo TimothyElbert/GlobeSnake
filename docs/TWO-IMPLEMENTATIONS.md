@@ -94,8 +94,11 @@ There `cross` returns zero, `normalise` hands back zeros, the walk never advance
 forever, and the scan reports its ceiling.
 
 The fork had no tangent frame at all — spherical trigonometry instead. At the pole `cos(lat) = 6.1e-17`
-collapses an `atan2` numerator and the longitude quantises. Their 32 bearings became **three
-meridians**.
+collapses an `atan2` numerator and the longitude quantises. Walking 200 km from −90° on six bearings,
+they measured **three distinct longitudes** where there should have been six. (Six is what they
+sampled; I originally wrote this up as "their 32 bearings became three meridians", which is a
+plausible extrapolation and not their measurement. Correcting it here, in a document about exactly
+this, seemed worth the paragraph.)
 
 Both failures scan fewer directions than they report. Both therefore *overstate* the inradius. **Both
 read as safe.** And `landmark-south-pole` sits at exactly −90.
