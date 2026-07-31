@@ -228,9 +228,19 @@ returns zero, `normalise` hands back zeros, the walk never advances, and the sca
 — a degenerate target read as maximally *safe*, which is the worst direction for this failure to
 take. This function carried the comment "degenerate at the exact poles; no target sits there" while
 the south pole target sat there. It survived only because `fromLatLon(-90, 0)` leaves a residual
-`cos(-90°) = 6.1e-17` that happens to define a direction. It now picks a genuinely perpendicular
-axis, and **nothing moved** — all four polar targets report the same inradius before and after. That
-is what a latent defect looks like when you find it before it fires.
+`cos(-90°) = 6.1e-17` that happens to define a direction. It now picks the smallest-magnitude basis
+vector — threshold-free, so there is no tuned number for a later reader to justify — and **nothing
+moved**: all four polar targets report the same inradius before and after. That is what a latent
+defect looks like when you find it before it fires.
+
+**The scan now asserts that its 32 bearings reach 32 distinct positions.** The mobile fork carried
+the identical defect by a completely unrelated mechanism: no tangent frame at all, but a vanishing
+`atan2` numerator that quantised six bearings onto three meridians. Both failures scan *fewer*
+directions than they report, and both therefore overstate the inradius — they read as **safe**.
+Neither implementation could have found the other's by inspection, since a zero cross product and a
+collapsing `atan2` have nothing in common; they share only the symptom. So the symptom is what gets
+asserted. With a fixed axis and an exact pole vector, all 32 bearings collapse to a single position,
+and the guard names the target and the count.
 
 Note that capture is **point-sampled once per tick**, unlike self-collision, which is swept along the
 arc. So a capture region can in principle be stepped straight over. A path passing at perpendicular

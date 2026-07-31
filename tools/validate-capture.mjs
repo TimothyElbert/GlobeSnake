@@ -290,7 +290,12 @@ function advance(p, h, arc) {
  * axis that is actually perpendicular instead.
  */
 function tangentAtBearing(p, bearingDeg) {
-  const up = Math.abs(p[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+  // Smallest-magnitude basis vector, so the reference is never near-parallel to
+  // `p` anywhere on the sphere. A `|p.y| > 0.9` threshold also works, but a
+  // threshold is a number someone must later justify; this has no tuning in it.
+  const a = [Math.abs(p[0]), Math.abs(p[1]), Math.abs(p[2])];
+  const up = [0, 0, 0];
+  up[a.indexOf(Math.min(...a))] = 1;
   const east = normalise(cross(up, p));
   const north = normalise(cross(p, east));
   const b = bearingDeg * DEG;
@@ -424,6 +429,28 @@ async function main() {
       warnings.push(
         `${where}: ISO3 "${r.countryIso3}" is absent from countries.json, so capture is radius-only ` +
         `and world.countryAt() reports unclaimed territory everywhere inside it`,
+      );
+    }
+
+    // 3c. The 32 bearings must actually go 32 different ways.
+    //
+    // The pole is a coordinate singularity and every parameterisation has its own
+    // way of dying there — this one via a zero cross product, the mobile fork's
+    // via a vanishing `atan2` numerator that quantised 6 bearings onto 3
+    // meridians. Both failures report a *smaller* scanned set as a *larger*
+    // inradius, i.e. they read as safe. Neither implementation could have found
+    // the other's by inspection, because the causes have nothing in common; what
+    // they share is only the symptom. So assert the symptom.
+    const spread = new Set();
+    for (let i = 0; i < BEARINGS; i++) {
+      const q = advance(position, tangentAtBearing(position, (360 / BEARINGS) * i), 200 / EARTH_RADIUS_KM);
+      spread.add(q.map((v) => v.toFixed(9)).join(','));
+    }
+    if (spread.size !== BEARINGS) {
+      errors.push(
+        `${where}: ${BEARINGS} bearings collapse to ${spread.size} distinct positions at ` +
+        `(${r.lat}, ${r.lon}) — the scan is sampling fewer directions than it reports, which ` +
+        `overstates the inradius. Coordinate singularity in the tangent frame.`,
       );
     }
 
