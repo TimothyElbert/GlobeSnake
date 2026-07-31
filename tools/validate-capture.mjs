@@ -60,6 +60,30 @@ async function assertNoDrift() {
     }
   }
 
+  // The floor must clear the tunnelling bound for every variant. Reads
+  // baseSpeedDeg out of each variant rather than assuming the engine default,
+  // which is the mistake that made the Tempest figure wrong.
+  const variants = [];
+  for (const [file, hasWind] of [['expedition', false], ['tempest', true], ['terra', false]]) {
+    let base = 3.6;                                     // snake.ts default
+    try {
+      const vs = await readFile(join(ROOT, 'src', 'variants', `${file}.ts`), 'utf8');
+      const bm = vs.match(/baseSpeedDeg:\s*([\d.]+)/);
+      if (bm) base = Number(bm[1]);
+    } catch { /* variant missing; the default is the safe assumption */ }
+    variants.push([file, base, hasWind]);
+  }
+  const { worst, detail } = requiredFloorKm(variants);
+  if (MIN_INRADIUS_KM < worst) {
+    errors.push(
+      `MIN_INRADIUS_KM is ${MIN_INRADIUS_KM} km but the tunnelling bound requires ` +
+      `${worst.toFixed(1)} km — ${detail.map((d) => `${d.name} d=${d.d} needs ${d.need}`).join(', ')}. ` +
+      `A capture region below the bound can be stepped over between ticks. Raise the floor, ` +
+      `or lower whichever speed multiplier grew.`,
+    );
+  }
+  driftNote = `tunnelling bound ${worst.toFixed(1)} km (${detail.map((d) => `${d.name} ${d.d} km/tick`).join(', ')})`;
+
   // Tripwire for the exact regression this file exists to prevent: the country
   // rule replacing the radius rather than adding to it.
   if (/captureCountry > 0\)\s*return world\.countryAt/.test(src)) {
@@ -80,18 +104,73 @@ async function assertNoDrift() {
 /**
  * Minimum acceptable inradius, in km.
  *
- * One texel of world.bin is ~9.8 km at the equator, so anything below that is a
- * target you can only hit by landing on a single sample of the raster. 60 km is
- * roughly 18 seconds of flight at base speed: enough that a deliberate approach
- * lands it, small enough that it is still a place and not a region.
+ * Two constraints meet here and the stricter one wins.
+ *
+ * *Fairness*: one texel of world.bin is ~9.8 km at the equator, so anything near
+ * that is a target you can only win by landing on a single sample of the raster.
+ *
+ * *Tunnelling*: capture is point-sampled once per tick, so the region must be
+ * bigger than the head's stride — `requiredFloorKm()` puts that at **52.0 km**,
+ * set by Tempest, and asserts it rather than trusting this comment.
+ *
+ * 55 clears the tunnelling bound with a little margin and sits below the smallest
+ * authored radius in the dataset (Singapore, 60 km, deliberately tight). It was
+ * 50 until the Tempest bound was computed properly, which is to say it was wrong:
+ * 50 < 52 meant the test would have passed a target the engine could step over.
  */
-const MIN_INRADIUS_KM = 50;
+const MIN_INRADIUS_KM = 55;
+
+/**
+ * The floor is not a taste decision. Capture is point-sampled once per tick while
+ * self-collision is swept, so a capture region smaller than the head's stride can
+ * be stepped clean over. Keeping the loss under 1% of the disc needs
+ * `R >= 3.544 * d`, where `d` is the greatest distance the head travels in a tick.
+ *
+ * `d` was first computed with the *default* `baseSpeedDeg` of 3.6 — but
+ * `tempest.ts` overrides it to 3.9, and Tempest is also the only variant that adds
+ * wind, so the binding case was understated twice over. `requiredFloorKm()` now
+ * derives the bound from the variant configs instead of trusting a number in a
+ * comment, and `main` fails if `MIN_INRADIUS_KM` drops below it.
+ */
+const SPEED_STACK = 1.18 * 1.25 * 1.35 * 1.3;   // river x ship surge x boost x wake
+const KM_PER_DEG = (2 * Math.PI * EARTH_RADIUS_KM) / 360;
+const TICK_HZ = 120;
+const SAFETY = 3.544;                            // 2/sqrt(1-0.99^2), the <=1% loss criterion
+
+/**
+ * Supremum of |wind| in degrees/second, derived from the constants in
+ * `variants/weather.ts`: the jet/trade band peak (1.549 at lat 32) plus the full
+ * turbulence range, plus a gyre at maximum falloff, plus a storm eyewall at
+ * maximum strength. 5.73 °/s.
+ *
+ * Do not replace this with a measured figure. Sampling the live field returned
+ * 3.18 °/s from a short sweep and 5.005 from a long one — it was still climbing
+ * with sample count, because a supremum over four sparse storms is not something
+ * random sampling converges to. The fork independently measured 4.90 and
+ * constructed 6.24. An empirical maximum is a lower bound on the supremum, and a
+ * floor built on one is a floor built on however long you happened to run.
+ */
+const WIND_SUP_DEG_S = 5.73;
+
+function requiredFloorKm(variantSpeeds) {
+  let worst = 0, detail = [];
+  for (const [name, baseSpeedDeg, hasWind] of variantSpeeds) {
+    const chain = (baseSpeedDeg * SPEED_STACK / TICK_HZ) * KM_PER_DEG;
+    const wind = hasWind ? (WIND_SUP_DEG_S / TICK_HZ) * KM_PER_DEG : 0;
+    const d = chain + wind;
+    const need = SAFETY * d;
+    detail.push({ name, d: +d.toFixed(2), need: +need.toFixed(1) });
+    if (need > worst) worst = need;
+  }
+  return { worst, detail };
+}
 
 /** Bearings sampled when measuring the inradius. */
 const BEARINGS = 32;
 
 const errors = [];
 const warnings = [];
+let driftNote = '';
 
 async function exists(p) { try { await access(p); return true; } catch { return false; } }
 
@@ -188,27 +267,49 @@ function isCaptured(cap, position, head, world) {
 
 /**
  * Smallest distance, over `BEARINGS` directions, at which capture stops holding.
- * Binary search per bearing: capture regions are not convex (a country is any
- * shape at all) so this reports the first failure outward, which is the
- * conservative reading and the one a player feels.
+ *
+ * **Linear scan, deliberately, not bisection.** Bisection assumes the predicate
+ * is monotone along the ray, and a capture region is any shape at all: a country
+ * has fjords, estuaries, lakes and enclaves, each a hole that capture fails
+ * inside. Given a hole, bisection does not find the first failure — it finds *a*
+ * failure, or steps over the hole entirely and reports a distance far beyond it.
+ *
+ * This was a real bug in this file, caught by the mobile fork's independent
+ * implementation. Every disagreement ran the same way, with bisection
+ * overstating: Norway 93.25 km actual against "no finding at all" (a 12.5 km gap
+ * of country-0 where Sognefjord cuts inland at 93.5 km), Portugal 58.5 against
+ * 73.6, Israel 37.5 against 44.3. An inradius that is too large is precisely the
+ * error a fairness test must not make.
+ *
+ * `SCAN_STEP_KM` must stay below the narrowest hole worth catching. One texel is
+ * ~9.8 km of longitude at the equator but `cos(lat)` of that further north — only
+ * ~2.0 km at Norway's latitude — so the step is 1 km, and the walk stops at the
+ * first failure rather than running to the limit. The result is then refined by
+ * bisection *within the last good kilometre*, where monotonicity does hold.
  */
-function inradiusKm(cap, position, world, limitKm = 400) {
-  let worst = Infinity;
+const SCAN_STEP_KM = 1;
+const SCAN_LIMIT_KM = 600;
+
+function inradiusKm(cap, position, world) {
+  let worst = Infinity, clamped = true;
   for (let i = 0; i < BEARINGS; i++) {
     const h = tangentAtBearing(position, (360 / BEARINGS) * i);
-    let lo = 0, hi = limitKm;
-    if (isCaptured(cap, position, advance(position, h, hi / EARTH_RADIUS_KM), world)) {
-      worst = Math.min(worst, hi);
-      continue;
+    let lastGood = 0, firstBad = -1;
+    for (let km = SCAN_STEP_KM; km <= SCAN_LIMIT_KM; km += SCAN_STEP_KM) {
+      if (isCaptured(cap, position, advance(position, h, km / EARTH_RADIUS_KM), world)) lastGood = km;
+      else { firstBad = km; break; }
     }
-    for (let step = 0; step < 18; step++) {
+    if (firstBad < 0) continue;                      // still capturing at the limit
+    clamped = false;
+    let lo = lastGood, hi = firstBad;
+    for (let step = 0; step < 12; step++) {
       const mid = (lo + hi) / 2;
       if (isCaptured(cap, position, advance(position, h, mid / EARTH_RADIUS_KM), world)) lo = mid;
       else hi = mid;
     }
-    worst = Math.min(worst, lo);
+    if (lo < worst) worst = lo;
   }
-  return worst;
+  return { km: worst === Infinity ? SCAN_LIMIT_KM : worst, clamped: worst === Infinity || clamped };
 }
 
 async function main() {
@@ -253,9 +354,22 @@ async function main() {
       errors.push(`${where}: country rule ${r.countryIso3} does not match the raster at its own point`);
     }
 
+    // 3b. A country-kind target whose ISO3 is absent from the border map is
+    //     carried entirely by its radius. That works, but it means countryAt()
+    //     returns ocean everywhere in that country, so anything else keying off
+    //     the border map is silently wrong there. Tuvalu is the live case: it is
+    //     a sovereign state and the bake does not emit it.
+    if ((r.kind === 'country' || r.kind === 'flag' || r.kind === 'outline')
+        && r.countryIso3 && cap.captureCountry === 0) {
+      warnings.push(
+        `${where}: ISO3 "${r.countryIso3}" is absent from countries.json, so capture is radius-only ` +
+        `and world.countryAt() reports unclaimed territory everywhere inside it`,
+      );
+    }
+
     // 4. Aim tolerance. This is the check that would have caught Nauru.
-    const inradius = inradiusKm(cap, position, world);
-    rows.push({ where, id: r.id, tier: r.tier, kind: r.kind, inradius, cap });
+    const { km: inradius, clamped } = inradiusKm(cap, position, world);
+    rows.push({ where, id: r.id, tier: r.tier, kind: r.kind, inradius, clamped, cap });
     if (inradius < MIN_INRADIUS_KM) {
       errors.push(
         `${where}: capture inradius is ${inradius.toFixed(1)} km (minimum ${MIN_INRADIUS_KM}). ` +

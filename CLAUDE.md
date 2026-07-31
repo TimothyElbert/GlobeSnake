@@ -25,7 +25,7 @@ Static site on GitHub Pages, deployed by Actions on push to `main`. No backend, 
 ```bash
 npm install
 npm run dev              # Vite on :5173 — see docs/TESTING.md before trying to verify anything
-npm run verify           # typecheck + target validation + bake assertions. Run before every commit.
+npm run verify           # typecheck + target + capture validation + bake assertions. Before every commit.
 npm run build            # tsc --noEmit && vite build
 ```
 

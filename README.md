@@ -146,7 +146,7 @@ versus derived.
 | [docs/BRIEF.md](docs/BRIEF.md) | Historical: the pre-build brief. Several proposals were overturned. |
 
 ```bash
-npm run verify    # typecheck + target validation + 68 bake assertions
+npm run verify    # typecheck + target validation + capture fairness + 68 bake assertions
 ```
 
 ## Licence

@@ -184,7 +184,7 @@ no entry whose name lies outside `location.origin`.
 Capture used to be **country _or_ radius, exclusively**: resolving a country index discarded the
 authored `radiusKm`, and the tier defaults for tiers 1–2 were `0`. `world.bin` is 4096×2048, about
 9.8 km per texel at the equator, so Nauru — 21 km² — rasterises to a **single cell**, and its
-authored 300 km radius was thrown away on the grounds that a country rule existed. Thirty-one
+authored 300 km radius was thrown away on the grounds that a country rule existed. Thirty-two
 targets had a capture inradius under 50 km; ten were under 3.5 km.
 
 Flying at Nauru from 600 km out and sweeping the aim error, measured in the running engine: a
@@ -205,8 +205,19 @@ The metric that matters is the **capture inradius**: walk outward from the autho
 bearings, and take the smallest distance at which capture stops holding. It answers "how badly may I
 aim and still win", which is what a player actually experiences, and unlike a cell count it does not
 care how the raster happens to be resolved. `npm run validate:capture` measures it for all 407 and
-fails under 50 km. It also reads `targets.ts` back and fails if the OR is reverted or the constant
+fails under 55 km. It also reads `targets.ts` back and fails if the OR is reverted or the constant
 drifts from the test's copy of it.
+
+**Walk the ray linearly; do not bisect it.** Bisection assumes the predicate is monotone outward, and
+a country is any shape at all — fjords, estuaries, lakes, enclaves, each a hole where capture fails.
+Given a hole, bisection finds *a* failure or steps over it entirely. This file did bisect, and every
+error ran the same way: Norway reported no finding at all against a true 93.3 km (a 12.5 km band of
+country-0 where Sognefjord cuts inland), Bangladesh 80.1 against 24.3 (the Meghna estuary), Portugal
+73.6 against 58.6. Thirteen targets overstated, none understated. Under the legacy rule the true count
+below 50 km was **32, not 31** — Bangladesh was the one bisection hid. An inradius that reads too
+large is exactly the error a fairness test must never make. The step is 1 km, because a texel is
+~9.8 km of longitude at the equator but `cos(lat)` of that further north — only ~2 km at Norway's
+latitude.
 
 Note that capture is **point-sampled once per tick**, unlike self-collision, which is swept along the
 arc. So a capture region can in principle be stepped straight over. A path passing at perpendicular
@@ -215,22 +226,42 @@ least one sample lands iff `b ≤ √(R² − (d/2)²)`, where `d` is the greate
 travel in one tick. Keeping the loss under 1% of the disc means **`R ≥ 3.544 · d`**.
 
 `d` is larger than it looks, because every multiplier in `Snake.update` stacks: terrain (river 1.18)
-× ship surge 1.25 × boost 1.35 × wake 1.3, on `baseSpeedDeg` 3.6 at 1/120 s — **8.64 km per tick**.
-Tempest adds wind on top, applied after `step()` and outside that chain; measured at storm eyewalls it
-peaks at 3.18 °/s, another 2.95 km, for **11.59 km per tick** and a required floor of **41.1 km**.
+× ship surge 1.25 × boost 1.35 × wake 1.3. **Use the variant's `baseSpeedDeg`, not the engine
+default** — `tempest.ts` overrides it to 3.9 (and `turnRateDeg` to 150), `terra.ts` to 3.1. Tempest
+is also the only variant that adds wind, applied after `step()` and outside the multiplier chain, so
+it is the binding case twice over:
 
-The 50 km floor therefore holds, but with 1.22× headroom, not the comfortable margin the
-non-Tempest figure suggests. **Raise the floor before raising any speed multiplier**, and re-measure
-rather than extrapolating — the binding term is `d`, and it is a product of five things that were
-each tuned for feel, by different people, at different times.
+| variant | `baseSpeedDeg` | `d` km/tick | `R ≥ 3.544·d` |
+|---|---|---|---|
+| Expedition | 3.6 | 8.64 | 30.6 km |
+| Terra | 3.1 | 7.44 | 26.4 km |
+| **Tempest** | **3.9** | **14.67** | **52.0 km** |
 
-That formula integrates a *straight* chord, and under wind the path curves, so the arc actually
-sampled inside the disc is shorter than the geometric one. Measured rather than assumed: 3,608
-flights past a 50 km disc at worst-case speed, wind held at maximum magnitude across eight bearings
-relative to the heading, sweeping approach distance and sub-tick phase. A "skip" is the path entering
-the disc while every discrete sample lands outside it. Worst skip depth **0.25 km**, against the
-straight-chord bound of **0.337 km** — curvature never beat the formula, because over a ~100 km chord
-the deflection is second-order. The straight-chord bound is safe to keep using at these radii.
+**The floor is 55 km, and it was 50 — which was wrong.** 50 < 52.0 meant the test would have passed a
+target the engine could step over. `validate-capture.mjs` now derives this bound from the variant
+configs and fails if the floor drops below it, so the coupling is asserted rather than remembered.
+
+**Bound the wind analytically; do not measure it.** The supremum from `weather.ts` is **5.73 °/s** —
+the jet/trade band peak (1.549 at lat 32) plus the full turbulence range, plus a gyre at maximum
+falloff, plus a storm eyewall at maximum strength (`4.0 × 0.704 × √(1+0.18²)`). Sampling the live
+field gave 3.18 °/s from a short sweep and 5.005 from a long one, *still climbing with sample count*:
+a supremum over four sparse storms is not something random sampling converges to, so an empirical
+maximum is only ever a lower bound on it. The first version of this section quoted the 3.18 and
+concluded the floor held with 1.22× headroom. It did not hold.
+
+That formula integrates a *straight* chord, so it is fair to ask whether wind bends the path enough to
+shorten the arc actually sampled. It does not, and the reason is structural: `applyWind` rotates the
+position **and the heading** by the same axis and angle, so it translates the frame rather than
+turning within it. A uniform wind therefore adds no curvature at all. Bending comes only from the
+field *varying* along the path, and it varies over a storm radius of ~890 km against a stride of
+~15 km — a sagitta of metres.
+
+Measured as well as argued: 3,608 flights past a 50 km disc, wind held at maximum magnitude across
+eight bearings relative to the heading, sweeping approach distance and sub-tick phase. A "skip" is the
+path entering the disc while every discrete sample lands outside it. Worst skip depth **0.25 km**
+against the straight-chord bound of **0.337 km** — curvature never beat the formula. (That sweep was
+run at `d` = 11.59 and R = 50, before the Tempest speed was corrected; the structural argument is what
+carries it to `d` = 14.67, not the sample.)
 
 The reason it is safe is worth stating, because it is not luck: **the fastest case is also the
 straightest.** Boost multiplies speed by 1.35 while cutting `turnScale` to 0.8, so the turning circle
