@@ -224,6 +224,15 @@ non-Tempest figure suggests. **Raise the floor before raising any speed multipli
 rather than extrapolating — the binding term is `d`, and it is a product of five things that were
 each tuned for feel, by different people, at different times.
 
+That formula integrates a *straight* chord, and under wind the path curves, so the arc actually
+sampled inside the disc is shorter than the geometric one. Measured rather than assumed: 3,608
+flights past a 50 km disc at worst-case speed, wind held at maximum magnitude across eight bearings
+relative to the heading, sweeping approach distance and sub-tick phase. A "skip" is the path entering
+the disc while every discrete sample lands outside it. Worst skip depth **0.25 km**, against the
+straight-chord bound of **0.337 km** — curvature never beat the formula, because over a ~100 km chord
+the deflection is second-order. The straight-chord bound is safe to keep using at these radii; it
+would need revisiting if `R` ever approached the turn radius.
+
 **This one shipped, and `npm run validate:targets` passed 407/407 the whole time.** It checks that
 coordinates are authored correctly — that Tunisia's point rasterises inside Tunisia. Whether a
 player can ever satisfy the win condition is a different property, and nothing was testing it.
