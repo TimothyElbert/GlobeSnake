@@ -17,6 +17,7 @@ Static site on GitHub Pages, deployed by Actions on push to `main`. No backend, 
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, data flow, "to change X, edit Y". |
 | [docs/TESTING.md](docs/TESTING.md) | How to verify without a compositing browser. Non-obvious and necessary. |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | What is true right now: finished, known gaps, what to do next, and every bug that shipped. |
+| [docs/TWO-IMPLEMENTATIONS.md](docs/TWO-IMPLEMENTATIONS.md) | Four defects found in pairs across two codebases. Read if you are about to trust a test. |
 | [docs/DESIGN.md](docs/DESIGN.md) | *Why* it is like this. Its **Revisions** section is authoritative wherever it contradicts the sections above it. |
 | [docs/BRIEF.md](docs/BRIEF.md) | Historical only — the pre-build brief. Several proposals in it were overturned. |
 

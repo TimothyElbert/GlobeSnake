@@ -142,6 +142,7 @@ versus derived.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, data flow, "to change X, edit Y". |
 | [docs/TESTING.md](docs/TESTING.md) | How to verify without a compositing browser. Non-obvious. |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | Current state, known gaps, what to do next. |
+| [docs/TWO-IMPLEMENTATIONS.md](docs/TWO-IMPLEMENTATIONS.md) | Four defects found in pairs across two codebases, and why a second opinion has to be independent. |
 | [docs/DESIGN.md](docs/DESIGN.md) | Why it is like this. Its Revisions section is authoritative. |
 | [docs/BRIEF.md](docs/BRIEF.md) | Historical: the pre-build brief. Several proposals were overturned. |
 

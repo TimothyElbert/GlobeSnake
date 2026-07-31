@@ -313,6 +313,10 @@ Wind is the exception, because advection does not care about turn rate — which
 separately above. If a future change raises speed *without* widening the circle, or raises `R` toward
 the turn radius, this stops holding and the bound needs re-deriving rather than re-quoting.
 
+The full account of how this was found — and of the three further defects it led to, each found in a
+pair across two independent implementations — is in
+[TWO-IMPLEMENTATIONS.md](TWO-IMPLEMENTATIONS.md).
+
 **This one shipped, and `npm run validate:targets` passed 407/407 the whole time.** It checks that
 coordinates are authored correctly — that Tunisia's point rasterises inside Tunisia. Whether a
 player can ever satisfy the win condition is a different property, and nothing was testing it.

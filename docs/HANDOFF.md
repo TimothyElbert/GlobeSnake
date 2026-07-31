@@ -4,7 +4,8 @@ Written at the end of the build sessions that produced the game. Start with
 [../CLAUDE.md](../CLAUDE.md); this file is the "what is actually true right now, and what would I do
 next" companion to it.
 
-**Last updated:** after the capture-fairness fix (31 uncapturable targets, `INVARIANTS.md` §12).
+**Last updated:** after the capture-fairness fix (32 uncapturable targets, `INVARIANTS.md` §12) and the
+cross-implementation audit it led to ([TWO-IMPLEMENTATIONS.md](TWO-IMPLEMENTATIONS.md)).
 
 ---
 
@@ -103,8 +104,13 @@ Worth reading as a list of failure modes this codebase is prone to. All are now 
 | `vertexColors: true` with no colour attribute | Ships rendered pure black on a dark ocean | Inspecting material state at runtime |
 | Hint cone aimed at the target | Hints far more useful than designed | Player report, then measuring offset over 25 targets |
 | Player-facing copy drifted from mechanics, 3× | Docs taught removed controls | Player report; now a house rule in CLAUDE.md |
-| 31 targets uncapturable; flying over them softlocked the run | Nauru is one 9.8 km texel, and its authored 300 km radius was discarded because a country rule existed | Player report, then measuring capture inradius across all 407 |
+| 32 targets uncapturable; flying over them softlocked the run | Nauru is one 9.8 km texel, and its authored 300 km radius was discarded because a country rule existed | Player report, then measuring capture inradius across all 407 |
 
 The pattern is consistent: **the bugs that survived were the ones that type-checked and were
 internally consistent.** Every one was caught by rendering a frame and looking at it, or by measuring
 a number, and never by reading the code.
+
+Three further defects — two in the capture test itself, one in a sister implementation — were caught
+only by a second implementation disagreeing. That account is
+[TWO-IMPLEMENTATIONS.md](TWO-IMPLEMENTATIONS.md), and it is the one to read before trusting a green
+suite.
