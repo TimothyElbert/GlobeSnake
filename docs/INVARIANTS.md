@@ -230,8 +230,19 @@ flights past a 50 km disc at worst-case speed, wind held at maximum magnitude ac
 relative to the heading, sweeping approach distance and sub-tick phase. A "skip" is the path entering
 the disc while every discrete sample lands outside it. Worst skip depth **0.25 km**, against the
 straight-chord bound of **0.337 km** — curvature never beat the formula, because over a ~100 km chord
-the deflection is second-order. The straight-chord bound is safe to keep using at these radii; it
-would need revisiting if `R` ever approached the turn radius.
+the deflection is second-order. The straight-chord bound is safe to keep using at these radii.
+
+The reason it is safe is worth stating, because it is not luck: **the fastest case is also the
+straightest.** Boost multiplies speed by 1.35 while cutting `turnScale` to 0.8, so the turning circle
+widens exactly when sampling coarsens. Measured on ocean, hard over: base turn radius **240 km** at
+3.67 km/tick, full-stack **703 km** at 8.64 km/tick (algebra says 707). The radius grows 2.9× while
+the sample spacing grows 2.4× — geometry straightens faster than sampling degrades, so the 50 km
+floor sits at 0.21× the turn radius at rest and **0.071× in the tunnelling regime**, which is the
+only regime where it matters.
+
+Wind is the exception, because advection does not care about turn rate — which is why it is bounded
+separately above. If a future change raises speed *without* widening the circle, or raises `R` toward
+the turn radius, this stops holding and the bound needs re-deriving rather than re-quoting.
 
 **This one shipped, and `npm run validate:targets` passed 407/407 the whole time.** It checks that
 coordinates are authored correctly — that Tunisia's point rasterises inside Tunisia. Whether a
