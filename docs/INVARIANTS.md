@@ -235,7 +235,8 @@ defect looks like when you find it before it fires.
 
 **The scan now asserts that its 32 bearings reach 32 distinct positions.** The mobile fork carried
 the identical defect by a completely unrelated mechanism: no tangent frame at all, but a vanishing
-`atan2` numerator that quantised six bearings onto three meridians. Both failures scan *fewer*
+`atan2` numerator whose sign is the only surviving information, quantising all 32 bearings onto
+three meridians. Both failures scan *fewer*
 directions than they report, and both therefore overstate the inradius — they read as **safe**.
 Neither implementation could have found the other's by inspection, since a zero cross product and a
 collapsing `atan2` have nothing in common; they share only the symptom. So the symptom is what gets

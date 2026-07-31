@@ -436,7 +436,7 @@ async function main() {
     //
     // The pole is a coordinate singularity and every parameterisation has its own
     // way of dying there — this one via a zero cross product, the mobile fork's
-    // via a vanishing `atan2` numerator that quantised 6 bearings onto 3
+    // via a vanishing `atan2` numerator that quantised all 32 bearings onto 3
     // meridians. Both failures report a *smaller* scanned set as a *larger*
     // inradius, i.e. they read as safe. Neither implementation could have found
     // the other's by inspection, because the causes have nothing in common; what

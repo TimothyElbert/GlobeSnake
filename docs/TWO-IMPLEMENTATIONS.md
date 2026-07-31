@@ -93,12 +93,11 @@ Mine built its local frame from a fixed `[0, 1, 0]` reference, which is parallel
 There `cross` returns zero, `normalise` hands back zeros, the walk never advances, capture holds
 forever, and the scan reports its ceiling.
 
-The fork had no tangent frame at all — spherical trigonometry instead. At the pole `cos(lat) = 6.1e-17`
-collapses an `atan2` numerator and the longitude quantises. Walking 200 km from −90° on six bearings,
-they measured **three distinct longitudes** where there should have been six. (Six is what they
-sampled; I originally wrote this up as "their 32 bearings became three meridians", which is a
-plausible extrapolation and not their measurement. Correcting it here, in a document about exactly
-this, seemed worth the paragraph.)
+The fork had no tangent frame at all — spherical trigonometry instead. At the pole
+`cos(lat) = 6.1e-17` collapses an `atan2` numerator, and the sign of that numerator becomes the only
+surviving information. So the longitude quantises no matter how wide you fan the bearings: measured
+at both poles on the full 32-bearing fan, **32 bearings produce 3 distinct longitudes** — −90, 0 and
+90. Three meridians.
 
 Both failures scan fewer directions than they report. Both therefore *overstate* the inradius. **Both
 read as safe.** And `landmark-south-pole` sits at exactly −90.
@@ -176,6 +175,32 @@ Independently derived, the two sides landed on `d` = 14.03 and 14.04, and wind s
   introduced it*.
 
 ---
+
+## A note on who can catch what
+
+The "three meridians" figure above has its own history, and it is the eighth instance of the pattern
+this document describes — the first one *inside* the document.
+
+When first published, that sentence read "their 32 bearings became three meridians." The fork's
+measurement at the time was **six** bearings collapsing to three longitudes. Thirty-two was my
+extrapolation of their result, written as if it were their result, and it made the defect sound worse
+than the evidence showed. I caught it on a re-read and corrected it in place, naming the original
+claim rather than swapping it silently. The fork then measured the full fan and found the
+extrapolation was, in fact, exactly right — which is the least interesting thing about it. **A claim
+being true does not make it supported**, and "I guessed and got away with it" is not a defence worth
+having in a document about numbers that survive review.
+
+The part worth generalising is theirs. The fork had reviewed that document, specifically to check
+whether their half was represented fairly, read the sentence containing the inflated number, and
+approved it. They were the only person with the data to catch it — it was their measurement — and
+they did not, because they were scanning for unfairness *against* them rather than overstatement *in
+their favour*.
+
+> **A reviewer of an account of their own errors is systematically the wrong person to catch a number
+> that flatters them, and systematically the only one who has the data to.**
+
+Which is the same shape as everything else here: the check was real, competently performed, and
+pointed at a slightly different question than the one that mattered.
 
 ## What this does not show
 
