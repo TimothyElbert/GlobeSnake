@@ -63,6 +63,22 @@ Do not "fix" these without a reason:
 - **Hints do not point at the answer.** The cone and circle offsets are intentional —
   [INVARIANTS.md §8](INVARIANTS.md#8-hints-must-not-point-at-the-answer).
 - **Terra has no exact-pin hint.** That is how it earns its difficulty.
+
+  *Open, and the owner's call — not a consistency obligation.* The mobile fork replaced Terra's hint
+  ladder wholesale, on the argument that a wedge-and-ring is a standing instrument pointing into
+  blankness and never suited a world you cannot see into. Theirs is an **arrow economy**: levels 1–3
+  are transient compass flashes (a true-bearing arrow, ~2 s, three total) and level 4 is a paid reveal
+  that pins the target and marks it over the minimap's fog, at multiplier 0.18. The true bearing is a
+  sanctioned exception to [§8](INVARIANTS.md#8-hints-must-not-point-at-the-answer)'s jitter rule —
+  honest because it is transient rather than standing.
+
+  It also resolves a tension this build carries: the anti-softlock failsafe here stops short of any
+  reveal, so its promise that you can never get stuck is weaker than it sounds, whereas a ladder that
+  legitimately ends in a reveal lets the failsafe escalate all the way. If it is ever wanted here, the
+  fork's shape is: `hintStyle` on the variant config (never variant-id checks), an
+  `ARROW_HINT_MULTIPLIER` ladder in scoring, a `HintArrow` prop re-aimed each frame with a hold-and-fade,
+  the reveal drawn *after* the minimap's fog pass, and the failsafe comment rewritten — it currently
+  promises the opposite of what an arrow economy would make true.
 - **Ships pay in boost, not points**, so they never compete with the objective.
 
 ## If I had another session
