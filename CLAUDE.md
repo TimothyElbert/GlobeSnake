@@ -71,6 +71,16 @@ is also what shipped the original bug, since `validate:targets` measured whether
 *authored* correctly and was read as whether it could be *won*. When two routes agree to a fraction
 of a percent, report the agreement, not the number.
 
+**Prefer measurement and algebra as the two routes, because they fail in opposite directions.** The
+capture floor's wind term was wrong twice: once *low*, from sampling a field to find a supremum that
+sampling cannot converge to (four sparse storms are effectively unhittable, and the maximum kept
+climbing with sample count — a bound that improves when you look harder is not a bound); then once
+*high*, from multiplying separate maxima that cannot co-occur (the fastest terrain is river, and
+`isWater` excludes River, so a gyre cannot be present on it). Both errors produced a figure that
+survived review. They are not one mistake with two signs: **sampling cannot find a supremum, and
+algebra cannot know what is reachable.** Neither route is safe alone, which is the actual reason to
+run both rather than merely a preference for redundancy.
+
 **Fairness is a hard constraint.** Anything lethal must be drawn, at its true size. Two separate
 bugs came from breaking this. If you cannot draw it, do not let it kill.
 
