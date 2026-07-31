@@ -59,6 +59,18 @@ hook to drive the simulation and capture real frames — [docs/TESTING.md](docs/
 serious bugs here (a mirrored Earth, an invisible lethal trail, ships absent from the scene graph)
 type-checked perfectly and shipped.
 
+**Compute it twice by different routes, and treat the agreement as the result.** A single number is
+not a measurement here, however carefully produced. Every error found while fixing the capture bug
+was caught by a second route disagreeing, and not one by inspecting the first: a constant transcribed
+into a test went stale *inside the commit that added the test*; a wind bound measured by sampling the
+globe uniformly came back 44% low because four sparse storms are effectively unhittable that way; a
+sweep reported `b_max` pinned at exactly 0.00 and exactly 50.00 at once, which is a clamp wearing a
+measurement's clothes; and a turn-radius fit was 34% high because the multiplier chain had boost
+applied twice. Each was a sound method returning a plausible number about the wrong quantity — which
+is also what shipped the original bug, since `validate:targets` measured whether a target was
+*authored* correctly and was read as whether it could be *won*. When two routes agree to a fraction
+of a percent, report the agreement, not the number.
+
 **Fairness is a hard constraint.** Anything lethal must be drawn, at its true size. Two separate
 bugs came from breaking this. If you cannot draw it, do not let it kill.
 
