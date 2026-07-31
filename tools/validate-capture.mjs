@@ -156,7 +156,22 @@ const MIN_INRADIUS_KM = 55;
 const STACK_NO_TERRAIN = 1.25 * 1.35 * 1.3;     // ship surge x boost x wake
 const KM_PER_DEG = (2 * Math.PI * EARTH_RADIUS_KM) / 360;
 const TICK_HZ = 120;
-const SAFETY = 3.544;                            // 2/sqrt(1-0.99^2), the <=1% loss criterion
+/**
+ * How much bigger than the per-tick stride a capture region must be.
+ *
+ * A path passing at perpendicular distance `b` from the centre has a chord of
+ * `2·√(R² − b²)` inside the disc, so a sample lands iff `b ≤ √(R² − (d/2)²)`.
+ * Requiring that guaranteed band to be at least `(1 − loss)·R`:
+ *
+ *     R ≥ d / (2·√(1 − (1 − loss)²))
+ *
+ * Derived at run time rather than pasted, because the literal here was 3.544 —
+ * the correct value — beside a comment claiming it was `2/√(1 − 0.99²)`, which is
+ * 14.18. Right number, wrong reason, which is the failure mode this whole file
+ * exists to document. The fork derived it independently and got 3.544406.
+ */
+const PERMITTED_LOSS = 0.01;
+const SAFETY = 1 / (2 * Math.sqrt(1 - (1 - PERMITTED_LOSS) ** 2));
 
 /**
  * Terrain and wind are not independent, so the bound is a max over *physically
@@ -441,6 +456,16 @@ async function main() {
     // inradius, i.e. they read as safe. Neither implementation could have found
     // the other's by inspection, because the causes have nothing in common; what
     // they share is only the symptom. So assert the symptom.
+    // Compared by string identity, NOT by a minimum-separation threshold. Do not
+    // "improve" this into `minSep < tol`: that comparison is **false for NaN**,
+    // and a degenerate frame yields NaN coordinates as readily as coincident
+    // ones, so a fan of NaNs would be waved through as healthy by the very check
+    // written to catch collapsed fans. String identity has no such hole —
+    // `NaN.toFixed(9)` is `"NaN"`, so NaN rays collapse to one entry and the
+    // count fails. Verified against all-NaN, partial-NaN, Infinity and
+    // all-coincident fans. (The hazard is the fork's, found while building their
+    // mutation table; this implementation never had it, which is luck rather
+    // than foresight — the string form was chosen for convenience.)
     const spread = new Set();
     for (let i = 0; i < BEARINGS; i++) {
       const q = advance(position, tangentAtBearing(position, (360 / BEARINGS) * i), 200 / EARTH_RADIUS_KM);

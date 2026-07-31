@@ -243,6 +243,13 @@ collapsing `atan2` have nothing in common; they share only the symptom. So the s
 asserted. With a fixed axis and an exact pole vector, all 32 bearings collapse to a single position,
 and the guard names the target and the count.
 
+**Compare those positions by identity, not by a distance threshold.** `minSep < tol` is *false* for
+NaN, and a degenerate frame produces NaN coordinates as readily as coincident ones — so a fan of NaNs
+sails through the check written to catch collapsed fans. This scan compares stringified coordinates,
+which has no such hole (`NaN.toFixed(9)` is `"NaN"`, so NaN rays collapse to one entry), but that was
+convenience rather than foresight; the fork found the hazard building a mutation table against their
+threshold form.
+
 Note that capture is **point-sampled once per tick**, unlike self-collision, which is swept along the
 arc. So a capture region can in principle be stepped straight over. A path passing at perpendicular
 distance `b` from the authored point has a chord of `2·√(R² − b²)` inside the guaranteed disc, so at
