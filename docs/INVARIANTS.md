@@ -227,3 +227,17 @@ each tuned for feel, by different people, at different times.
 **This one shipped, and `npm run validate:targets` passed 407/407 the whole time.** It checks that
 coordinates are authored correctly — that Tunisia's point rasterises inside Tunisia. Whether a
 player can ever satisfy the win condition is a different property, and nothing was testing it.
+
+Which is the part worth carrying to the next bug: **the failure was not a missing test, it was a
+test that looked like it covered the thing it did not.** A green suite is evidence about the
+questions it asks, and a target dataset has at least two — is this authored right, and can this be
+won. Before trusting a check, say out loud what it would let through.
+
+The same shape recurred three more times while fixing it, which is how reliably this codebase
+produces it. The test's copy of `TIER_RADIUS_KM` went stale *inside the commit that introduced the
+test* — hence the drift assertion. The Tempest wind bound was first measured by scattering samples
+across the globe, which returned 2.21 °/s and looked clean; it was 44% low, because four sparse
+storms are essentially unhittable by uniform sampling and the sweep had only ever caught their
+edges. And the fix was briefly verified against a *different checkout's* dev server that happened to
+hold port 5173 — hence `vite.config.ts` honouring `PORT`. Each was a plausible method returning a
+plausible number about the wrong thing.
