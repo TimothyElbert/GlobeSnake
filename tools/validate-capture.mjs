@@ -82,7 +82,8 @@ async function assertNoDrift() {
       `or lower whichever speed multiplier grew.`,
     );
   }
-  driftNote = `tunnelling bound ${worst.toFixed(1)} km (${detail.map((d) => `${d.name} ${d.d} km/tick`).join(', ')})`;
+  driftNote = `tunnelling bound ${worst.toFixed(1)} km (`
+    + detail.map((d) => `${d.name} ${d.d} km/tick on ${d.terrain}`).join(', ') + ')';
 
   // Tripwire for the exact regression this file exists to prevent: the country
   // rule replacing the radius rather than adding to it.
@@ -110,13 +111,13 @@ async function assertNoDrift() {
  * that is a target you can only win by landing on a single sample of the raster.
  *
  * *Tunnelling*: capture is point-sampled once per tick, so the region must be
- * bigger than the head's stride — `requiredFloorKm()` puts that at **52.0 km**,
- * set by Tempest, and asserts it rather than trusting this comment.
+ * bigger than the head's stride — `requiredFloorKm()` puts that at **49.7 km**,
+ * set by Tempest over ocean, and asserts it rather than trusting this comment.
  *
- * 55 clears the tunnelling bound with a little margin and sits below the smallest
- * authored radius in the dataset (Singapore, 60 km, deliberately tight). It was
- * 50 until the Tempest bound was computed properly, which is to say it was wrong:
- * 50 < 52 meant the test would have passed a target the engine could step over.
+ * 55 clears the tunnelling bound and sits below the smallest authored radius in
+ * the dataset (Singapore, 60 km, deliberately tight). It was 50, which cleared the
+ * real bound by 0.3 km — passing, but by less than the error bars on any of the
+ * numbers that produced it, and only discovered by computing it three times.
  */
 const MIN_INRADIUS_KM = 55;
 
@@ -132,10 +133,33 @@ const MIN_INRADIUS_KM = 55;
  * derives the bound from the variant configs instead of trusting a number in a
  * comment, and `main` fails if `MIN_INRADIUS_KM` drops below it.
  */
-const SPEED_STACK = 1.18 * 1.25 * 1.35 * 1.3;   // river x ship surge x boost x wake
+const STACK_NO_TERRAIN = 1.25 * 1.35 * 1.3;     // ship surge x boost x wake
 const KM_PER_DEG = (2 * Math.PI * EARTH_RADIUS_KM) / 360;
 const TICK_HZ = 120;
 const SAFETY = 3.544;                            // 2/sqrt(1-0.99^2), the <=1% loss criterion
+
+/**
+ * Terrain and wind are not independent, so the bound is a max over *physically
+ * reachable* combinations rather than a product of separate maxima.
+ *
+ * `isWater` in core/world.ts is Ocean, Shallow and **Lake** — River is not water.
+ * Gyres are gated on `isWater` at the sample point, so the fastest terrain (river,
+ * 1.18) is exactly the terrain where a gyre cannot be contributing. Storms are
+ * gated only on the *storm's own centre*, so eyewall wind does reach a river texel
+ * inland of an ocean-centred storm; the jet and turbulence are everywhere.
+ *
+ * Taking 1.18 together with the full 5.73 wind — as this file first did — prices a
+ * combination the engine cannot produce. Conservative, but not physical, and it
+ * overstated the bound by 2.3 km.
+ */
+const TERRAIN_CASES = [
+  { name: 'river', speed: 1.18, water: false },
+  { name: 'ocean', speed: 1.10, water: true },
+  { name: 'lake', speed: 1.08, water: true },
+  { name: 'coast', speed: 1.05, water: false },
+];
+const WIND_BAND_AND_STORM = 4.830;               // jet + trade + turbulence + eyewall
+const WIND_GYRE = 0.900;                         // water only
 
 /**
  * Supremum of |wind| in degrees/second, derived from the constants in
@@ -155,11 +179,15 @@ const WIND_SUP_DEG_S = 5.73;
 function requiredFloorKm(variantSpeeds) {
   let worst = 0, detail = [];
   for (const [name, baseSpeedDeg, hasWind] of variantSpeeds) {
-    const chain = (baseSpeedDeg * SPEED_STACK / TICK_HZ) * KM_PER_DEG;
-    const wind = hasWind ? (WIND_SUP_DEG_S / TICK_HZ) * KM_PER_DEG : 0;
-    const d = chain + wind;
-    const need = SAFETY * d;
-    detail.push({ name, d: +d.toFixed(2), need: +need.toFixed(1) });
+    let best = { d: 0, terrain: null };
+    for (const t of TERRAIN_CASES) {
+      const chain = (baseSpeedDeg * t.speed * STACK_NO_TERRAIN / TICK_HZ) * KM_PER_DEG;
+      const windDeg = hasWind ? WIND_BAND_AND_STORM + (t.water ? WIND_GYRE : 0) : 0;
+      const d = chain + (windDeg / TICK_HZ) * KM_PER_DEG;
+      if (d > best.d) best = { d, terrain: t.name };
+    }
+    const need = SAFETY * best.d;
+    detail.push({ name, d: +best.d.toFixed(2), terrain: best.terrain, need: +need.toFixed(1) });
     if (need > worst) worst = need;
   }
   return { worst, detail };
@@ -382,6 +410,7 @@ async function main() {
 
   rows.sort((a, b) => a.inradius - b.inradius);
   console.log(`\n${records.length} targets checked for capturability`);
+  if (driftNote) console.log(`${driftNote}; floor ${MIN_INRADIUS_KM} km`);
   if (rows.length) {
     console.log('\ntightest 10:');
     for (const r of rows.slice(0, 10)) {

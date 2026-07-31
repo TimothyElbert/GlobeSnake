@@ -231,23 +231,38 @@ default** — `tempest.ts` overrides it to 3.9 (and `turnRateDeg` to 150), `terr
 is also the only variant that adds wind, applied after `step()` and outside the multiplier chain, so
 it is the binding case twice over:
 
-| variant | `baseSpeedDeg` | `d` km/tick | `R ≥ 3.544·d` |
-|---|---|---|---|
-| Expedition | 3.6 | 8.64 | 30.6 km |
-| Terra | 3.1 | 7.44 | 26.4 km |
-| **Tempest** | **3.9** | **14.67** | **52.0 km** |
+**Terrain and wind are not independent**, so the bound is a max over *physically reachable*
+combinations, not a product of separate maxima. `isWater` is Ocean, Shallow and **Lake** — River is
+not water — and gyres are gated on `isWater` at the sample point. So the fastest terrain (river,
+1.18) is exactly where a gyre cannot contribute. Storms are gated only on the storm's own centre, so
+eyewall wind *does* reach a river texel inland of an ocean-centred storm.
 
-**The floor is 55 km, and it was 50 — which was wrong.** 50 < 52.0 meant the test would have passed a
-target the engine could step over. `validate-capture.mjs` now derives this bound from the variant
-configs and fails if the floor drops below it, so the coupling is asserted rather than remembered.
+| variant | `baseSpeedDeg` | worst terrain | `d` km/tick | `R ≥ 3.544·d` |
+|---|---|---|---|---|
+| Expedition | 3.6 | river | 8.64 | 30.6 km |
+| Terra | 3.1 | river | 7.44 | 26.4 km |
+| **Tempest** | **3.9** | **ocean** | **14.03** | **49.7 km** |
+
+**The floor is 55 km. It was 50, which cleared the real bound by 0.3 km** — passing, but by less than
+the error bars on any of the numbers that produced it. `validate-capture.mjs` now derives this bound
+from the variant configs and fails if the floor drops below it, so the coupling is asserted rather
+than remembered.
 
 **Bound the wind analytically; do not measure it.** The supremum from `weather.ts` is **5.73 °/s** —
 the jet/trade band peak (1.549 at lat 32) plus the full turbulence range, plus a gyre at maximum
 falloff, plus a storm eyewall at maximum strength (`4.0 × 0.704 × √(1+0.18²)`). Sampling the live
 field gave 3.18 °/s from a short sweep and 5.005 from a long one, *still climbing with sample count*:
 a supremum over four sparse storms is not something random sampling converges to, so an empirical
-maximum is only ever a lower bound on it. The first version of this section quoted the 3.18 and
-concluded the floor held with 1.22× headroom. It did not hold.
+maximum is only ever a lower bound on it.
+
+This number has now been wrong twice in opposite directions, which is the honest thing to record. The
+first version quoted the measured 3.18 and claimed 1.22× headroom; the real headroom was 1.006×. The
+second overcorrected by pricing river terrain against a wind field including a gyre, which cannot
+occur on river, and concluded the floor had *failed* at 52.0 against 50. It had not: the physical
+bound is 49.7, so the old floor cleared by 300 m. **The right lesson is not that either number was
+wrong but that a quantity nobody can bound to better than 10% was being compared against a threshold
+chosen to the nearest 5 km.** 55 is not tighter arithmetic, it is margin — which is what you use when
+the inputs are five multipliers and an analytic field, each tuned separately for feel.
 
 That formula integrates a *straight* chord, so it is fair to ask whether wind bends the path enough to
 shorten the arc actually sampled. It does not, and the reason is structural: `applyWind` rotates the
